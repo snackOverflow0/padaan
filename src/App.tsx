@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type P
 import { reverse, searchPlaces } from "./geo";
 import { Icon, type IconName } from "./icons";
 import { Pic } from "./photos";
+import { DesktopHome } from "./DesktopHome";
 import { MapView, type MapPoint } from "./map";
 import {
   CATS, DEFAULT_START, DESTS, GEO, MODES, PACKS, STOPS, ROLES, directionsLinks, km, agoText, catIcon, dateAgo, fareText, fresh, hm, legTotals, modeIcon, modeKey, peso, tripPlan,
@@ -131,6 +132,12 @@ function dayGeometry(list: Dest[], st: Place, open?: (id: string) => void) {
   });
   return { pts, lines };
 }
+
+const useMedia = (q: string) => {
+  const [m, setM] = useState(() => typeof matchMedia !== "undefined" && matchMedia(q).matches);
+  useEffect(() => { const l = matchMedia(q), f = () => setM(l.matches); f(); l.addEventListener("change", f); return () => l.removeEventListener("change", f); }, [q]);
+  return m;
+};
 
 function Rail({ view, go, ready, savedN }: { view: string; go: (v: string) => void; ready: string[]; savedN: number }) {
   return (
@@ -370,21 +377,19 @@ function Explore({ saved, toggleSave, open, ago, onSearch, onHelp }: { saved: st
 }
 
 function BottomNav({ view, go, ready, savedN }: { view: string; go: (v: string) => void; ready: string[]; savedN: number }) {
-  const you = view === "saved" || view === "trip" || view === "offline";
-  const items: [string, string, IconName, boolean][] = [
-    ["explore", "Explore", "explore", view === "explore" || view === "route"],
-    ["saved", "You", you ? "bookmark-fill" : "bookmark", you],
-    ["contribute", "Contribute", "plus", view === "contribute"],
-  ];
   return (
     <nav className="bnav" aria-label="Main">
       <img className="bn-brand" src="/logo-mark.png" alt="Padaan" />
-      {items.map(([id, label, ic, on]) => (
-        <button key={id} className={`bn ${on ? "on" : ""}`} aria-current={on ? "page" : undefined} onClick={() => go(id)}>
-          <span className="bn-ic"><Icon name={ic} size={22} />{id === "saved" && (savedN > 0 || ready.length > 0) && <i className="bn-dot" />}</span>
-          <span className="bn-lb">{label}</span>
-        </button>
-      ))}
+      {nav.map((n) => {
+        const on = view === n.id || (view === "route" && n.id === "explore");
+        const badge = n.id === "offline" ? ready.length : n.id === "saved" ? savedN : 0;
+        return (
+          <button key={n.id} className={`bn ${on ? "on" : ""}`} aria-current={on ? "page" : undefined} onClick={() => go(n.id)}>
+            <span className="bn-ic"><Icon name={on && n.id === "saved" ? "bookmark-fill" : n.icon} size={22} />{badge > 0 && <i className="bn-badge">{badge}</i>}</span>
+            <span className="bn-lb">{n.short}</span>
+          </button>
+        );
+      })}
     </nav>
   );
 }
@@ -393,7 +398,7 @@ function YouHeader({ view, go, unread, onBell, start, onStart }: { view: string;
   const tabs: [string, string, IconName][] = [["saved", "Saved", "bookmark"], ["trip", "Trips", "route"], ["offline", "Offline", "download"]];
   return (
     <div className="you-head">
-      <div className="you-title"><h2>You</h2><button className="icon-btn" aria-label={unread ? "Notifications, unread" : "Notifications"} onClick={onBell}><Icon name="bell" size={20} />{unread && <i className="ping" />}</button></div>
+      <div className="you-title"><h2>{view === "trip" ? "Trips" : view === "offline" ? "Offline" : "Saved"}</h2><button className="icon-btn" aria-label={unread ? "Notifications, unread" : "Notifications"} onClick={onBell}><Icon name="bell" size={20} />{unread && <i className="ping" />}</button></div>
       <button className="you-row" onClick={onStart}><span className="you-ic"><Icon name="pin" size={20} /></span><span><b>Starting point</b><small>{start}</small></span><Icon name="chevron" size={18} /></button>
       <div className="you-tabs" role="group" aria-label="Your things">
         {tabs.map(([id, label, ic]) => <button key={id} className={view === id ? "on" : ""} aria-pressed={view === id} onClick={() => go(id)}><Icon name={ic} size={16} />{label}</button>)}
@@ -738,6 +743,7 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const setPlace = (p: Place) => { setManual(true); setStart(p); say(`Starting from ${p.name.split(",")[0]}`); };
   const pickPlace = async (c: { lat: number; lng: number }) => setPlace({ name: await reverse(c.lat, c.lng), ...c });
+  const wide = useMedia("(min-width: 981px)");
   const ctx: StartCtxT = { ...start, change: () => setStartOpen(true), set: setPlace, pick: pickPlace };
   const d = DESTS.find((x) => x.id === sel)!;
   const ago = (x: Dest) => confirmed[x.id] ?? x.daysAgo;
@@ -787,7 +793,8 @@ export default function App() {
         <Topbar start={start.name.split(",")[0]} onStart={() => setStartOpen(true)} view={view} unread={!read} onSearch={() => setPalette(true)} onHelp={() => setHelp(true)} bell={bell} onBell={() => setBell(!bell)} onRead={() => { setRead(true); setBell(false); }} onHome={() => go("explore")} />
         <main id="main" className={`page v-${view}`} key={view + (view === "route" ? sel : "")}>
           {(view === "saved" || view === "trip" || view === "offline") && <YouHeader view={view} go={go} unread={!read} onBell={() => setNotifOpen(true)} start={start.name.split(",")[0]} onStart={() => setStartOpen(true)} />}
-          {view === "explore" && <Explore saved={saved} toggleSave={toggleSave} open={open} ago={ago} onSearch={() => setPalette(true)} onHelp={() => setHelp(true)} />}
+          {view === "explore" && wide && <DesktopHome saved={saved} toggleSave={toggleSave} open={open} st={ctx} />}
+          {view === "explore" && !wide && <Explore saved={saved} toggleSave={toggleSave} open={open} ago={ago} onSearch={() => setPalette(true)} onHelp={() => setHelp(true)} />}
           {view === "route" && <RouteDetail d={d} ago={ago(d)} saved={saved.includes(d.id)} onSave={() => toggleSave(d.id)} inTrip={stops.includes(d.id)} onBack={() => history.length > 1 ? history.back() : go("explore")}
             onAdd={() => { if (!stops.includes(d.id)) { setStops([...stops, d.id]); say(`${d.name} added to your trip`); } go("trip"); }}
             onConfirm={() => { setConfirmed({ ...confirmed, [d.id]: 0 }); say("Thanks. Marked as confirmed today."); }} />}
