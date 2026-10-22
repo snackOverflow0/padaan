@@ -8,7 +8,7 @@ import { clearGuest, currentUser, isGuest, signOut, type User } from "./auth";
 import { buildTrip, smartPlan, type Pace } from "./planner";
 import { MapView, type MapPoint } from "./map";
 import {
-  CATS, DEFAULT_START, DESTS, GEO, MODES, PACKS, STOPS, ROLES, directionsLinks, km, agoText, catIcon, dateAgo, fareText, fresh, hm, legTotals, modeIcon, modeKey, peso, tripPlan,
+  CATS, DEFAULT_START, DESTS, GEO, MODES, PACKS, STOPS, ROLES, directionsLinks, km, agoText, catIcon, dateAgo, fareText, fresh, hm, legTotals, modeIcon, modeKey, peso,
   type Cat, type Dest, type Mode, type Place,
 } from "./data";
 
@@ -533,8 +533,6 @@ function TripPlanner(p: { stops: string[]; setStops: (s: string[]) => void; days
   const plan = useMemo(() => smartPlan(stops, st, { days: auto ? "auto" : days, pace, optimize: opt }), [stops, days, auto, pace, opt, st.lat, st.lng, st.name]);
   const nd = plan.days.length, di = Math.min(day, nd - 1);
   const cur = plan.days[di];
-  const free = DESTS.filter((d) => !stops.includes(d.id));
-  const move = (i: number) => { const s = [...stops]; [s[i - 1], s[i]] = [s[i], s[i - 1]]; p.setStops(s); };
   const hero = plan.stops[0];
   const geo = useMemo(() => dayGeometry(cur.stops, st, p.open), [cur, st]);
   return (
@@ -543,43 +541,36 @@ function TripPlanner(p: { stops: string[]; setStops: (s: string[]) => void; days
         <div className="card-pad">
           <span className="eyebrow">Build a real journey</span>
           <h2>{nd}-day Region I trip</h2>
-          <div className="smart no-print">
-            <div className="smart-h"><Icon name="star" size={16} /><b>Smart planner</b></div>
-            <p>Pick places, or choose what you like and I will build the trip. I order the stops, fit each day and flag early starts and overnights.</p>
-            <div className="smart-chips" role="group" aria-label="Interests">{CATS.map((c) => <button key={c} className={interests.includes(c) ? "on" : ""} aria-pressed={interests.includes(c)} onClick={() => setInterests(interests.includes(c) ? interests.filter((x) => x !== c) : [...interests, c])}><Icon name={catIcon[c]} size={15} />{c}</button>)}</div>
-            <div className="smart-pace" role="group" aria-label="Pace">{(["Relaxed", "Balanced", "Packed"] as Pace[]).map((x) => <button key={x} className={pace === x ? "on" : ""} aria-pressed={pace === x} onClick={() => setPace(x)}>{x}</button>)}</div>
-            <button className="btn primary smart-go" onClick={() => { p.setStops(buildTrip(interests, st, auto ? "auto" : days, pace)); setDay(0); }}><Icon name="star" size={17} />Build my trip</button>
-            <label className="sw"><input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />Choose the number of days for me</label>
-            <label className="sw"><input type="checkbox" checked={opt} onChange={(e) => setOpt(e.target.checked)} />Put my stops in the best order</label>
+          <div className="startpoint"><span className="jnode"><Icon name="pin" size={14} /></span><div><small>Starting point</small><strong>{st.name}</strong></div><button className="link" onClick={st.change}>Change</button></div>
+
+          <div className="step"><span className="step-n">1</span><div><h3>Where do you want to go?</h3><small>Tap the places you want to visit</small></div></div>
+          <div className="pickgrid" role="group" aria-label="Places to visit">
+            {DESTS.map((d) => { const on = stops.includes(d.id); return <button key={d.id} className={on ? "on" : ""} aria-pressed={on} onClick={() => p.setStops(on ? stops.filter((s) => s !== d.id) : [...stops, d.id])}><Icon name={on ? "check" : "plus"} size={15} />{d.name}</button>; })}
           </div>
 
-          <div className="startpoint"><span className="jnode"><Icon name="pin" size={14} /></span><div><small>Starting point</small><strong>{st.name}</strong></div></div>
+          <div className="step"><span className="step-n">2</span><div><h3>How long?</h3><small>{auto ? "Padaan will choose the number of days" : `${days} ${days === 1 ? "day" : "days"}`}</small></div></div>
+          <div className="durpick" role="group" aria-label="Trip length">
+            <button className={auto ? "on" : ""} aria-pressed={auto} onClick={() => setAuto(true)}>Auto</button>
+            {[1, 2, 3, 4, 5, 6, 7].map((n) => <button key={n} className={!auto && days === n ? "on" : ""} aria-pressed={!auto && days === n} onClick={() => { setAuto(false); p.setDays(n); }}>{n}<small>{n === 1 ? "day" : "days"}</small></button>)}
+          </div>
+          <Stepper label="Travelers" icon="users" value={people} min={1} max={12} set={p.setPeople} />
 
-          <div className="sec-head sm"><h3>Your stops</h3><span>{stops.length}</span></div>
-          {!stops.length && <p className="hint">No stops yet. Add a destination below to build your itinerary.</p>}
-          <ol className="stops">
-            {stops.map((id, i) => { const d = DESTS.find((x) => x.id === id)!; return (
-              <li key={id}>
-                <span className="num">{i + 1}</span>
-                <div><b>{d.name}</b><small>{d.place}</small></div>
-                {!opt && i > 0 && <button className="icon-btn sm" aria-label={`Move ${d.name} earlier`} onClick={() => move(i)}><Icon name="up" size={16} /></button>}
-                <button className="icon-btn sm" aria-label={`Remove ${d.name}`} onClick={() => p.setStops(stops.filter((s) => s !== id))}><Icon name="x" size={16} /></button>
-              </li>); })}
-          </ol>
+          <div className="step"><span className="step-n">3</span><div><h3>{stops.length ? "Your trip is ready" : "Your trip builds itself"}</h3><small>{stops.length ? "It updates when you change places or days" : "Add a place above to start"}</small></div></div>
+          {stops.length > 0 && <ol className="stops">{plan.stops.map((d, i) => (
+            <li key={d.id}><span className="num">{i + 1}</span><div><b>{d.name}</b><small>{d.place}</small></div>
+              <button className="icon-btn sm" aria-label={`Remove ${d.name}`} onClick={() => p.setStops(stops.filter((s) => s !== d.id))}><Icon name="x" size={16} /></button></li>))}</ol>}
+          {plan.overflow.length > 0 && <div className="smart-fit no-print"><p><Icon name="alert" size={16} />That is more than {days} {days === 1 ? "day" : "days"} of travel.</p><div><button className="btn secondary sm" onClick={() => setAuto(true)}>Let Padaan add days</button><button className="btn secondary sm" onClick={() => p.setStops(stops.filter((id) => !plan.overflow.some((o) => o.id === id)))}>Keep only what fits</button></div></div>}
           {plan.notes.length > 0 && <ul className="smart-notes no-print">{plan.notes.map((n, i) => <li key={i}><Icon name="info" size={15} />{n}</li>)}</ul>}
-          {plan.suggest.length > 0 && <div className="smart-sugg no-print"><small>Nearby add-ons</small>{plan.suggest.map((x) => <button key={x.d.id} onClick={() => p.setStops([...stops, x.d.id])}><Icon name="plus" size={15} /><span><b>{x.d.name}</b><small>{x.why}</small></span></button>)}</div>}
-          {free.length > 0 && (
-            <label className="add-stop"><Icon name="plus" size={17} />
-              <select aria-label="Add destination" value="" onChange={(e) => e.target.value && p.setStops([...stops, e.target.value])}>
-                <option value="">Add a destination</option>{free.map((d) => <option key={d.id} value={d.id}>{d.name} · {d.place}</option>)}
-              </select>
-            </label>
-          )}
+          {plan.suggest.length > 0 && <div className="smart-sugg no-print"><small>{plan.free > 0 ? "Free days left? Add one of these" : "Nearby add-ons"}</small>{plan.suggest.map((x) => <button key={x.d.id} onClick={() => p.setStops([...stops, x.d.id])}><Icon name="plus" size={15} /><span><b>{x.d.name}</b><small>{x.why}</small></span></button>)}</div>}
 
-          <div className="two">
-            {auto ? <div className="auto-days"><Icon name="calendar" size={18} /><span><b>{nd} {nd === 1 ? "day" : "days"}</b><small>Set automatically</small></span></div> : <Stepper label="Duration" icon="calendar" value={days} min={1} max={7} unit={["day", "days"]} set={p.setDays} />}
-            <Stepper label="Travelers" icon="users" value={people} min={1} max={12} set={p.setPeople} />
-          </div>
+          <details className="more no-print"><summary><Icon name="star" size={16} />Not sure where to go? Let Padaan pick</summary>
+            <div className="smart-chips" role="group" aria-label="Interests">{CATS.map((c) => <button key={c} className={interests.includes(c) ? "on" : ""} aria-pressed={interests.includes(c)} onClick={() => setInterests(interests.includes(c) ? interests.filter((x) => x !== c) : [...interests, c])}><Icon name={catIcon[c]} size={15} />{c}</button>)}</div>
+            <button className="btn primary smart-go" onClick={() => { p.setStops(buildTrip(interests, st, auto ? "auto" : days, pace)); setDay(0); }}><Icon name="star" size={17} />Pick places for me</button>
+          </details>
+          <details className="more no-print"><summary><Icon name="sliders" size={16} />Pace and order</summary>
+            <div className="smart-pace" role="group" aria-label="Pace">{(["Relaxed", "Balanced", "Packed"] as Pace[]).map((x) => <button key={x} className={pace === x ? "on" : ""} aria-pressed={pace === x} onClick={() => setPace(x)}>{x}</button>)}</div>
+            <label className="sw"><input type="checkbox" checked={opt} onChange={(e) => setOpt(e.target.checked)} />Put my stops in the best order</label>
+          </details>
 
           <dl className="totals">
             <div><dt><Icon name="clock" size={14} />Travel time</dt><dd>{hm(plan.minutes)}</dd></div>
@@ -621,7 +612,7 @@ function TripPlanner(p: { stops: string[]; setStops: (s: string[]) => void; days
 
         {plan.days.map((dd, n) => (
           <div key={n} className={n === di ? "day" : "day print-only"} role={n === di ? "tabpanel" : undefined}>
-            <div className="day-head"><span className="eyebrow">Day {n + 1}</span><h3>{dd.stops.length ? dd.stops.map((s) => s.name).join(" + ") : "Free day"}</h3>{dd.summary && <p className="day-sum">{dd.summary.badge && <b>{dd.summary.badge}</b>}About {hm(dd.summary.hours * 60)} · {Math.round(dd.summary.km)} km · {dd.stops.length} {dd.stops.length === 1 ? "place" : "places"}</p>}</div>
+            <div className="day-head"><span className="eyebrow">Day {n + 1}</span><h3>{dd.title ?? (dd.stops.length ? dd.stops.map((s) => s.name).join(" + ") : "Free day")}</h3>{dd.summary && <p className="day-sum">{dd.summary.badge && <b>{dd.summary.badge}</b>}About {hm(dd.summary.hours * 60)} · {Math.round(dd.summary.km)} km · {dd.summary.places} {dd.summary.places === 1 ? "place" : "places"}</p>}</div>
             <ol className="timeline">
               {dd.events.map((e, i) => (
                 <li key={i} data-k={e.icon}>
