@@ -4,7 +4,8 @@ export type IconName =
   | "route" | "bookmark" | "bookmark-fill" | "download" | "users" | "shield" | "search" | "bell" | "calendar"
   | "walk" | "car" | "pin" | "plus" | "more" | "arrow" | "arrow-left" | "check" | "cloud" | "map" | "clock"
   | "star" | "x" | "trash" | "minus" | "jeepney" | "tricycle" | "bike" | "bus" | "boat" | "wallet" | "swap"
-  | "alert" | "info" | "printer" | "compass" | "sliders" | "chevron" | "up" | "flag" | "leaf" | "phone" | "refresh";
+  | "alert" | "info" | "printer" | "compass" | "sliders" | "chevron" | "up" | "flag" | "leaf" | "phone" | "refresh"
+  | "layers" | "locate" | "directions" | "share" | "home" | "explore";
 
 const iconPaths: Record<IconName, ReactNode> = {
   route: <><circle cx="6" cy="19" r="2" /><circle cx="18" cy="5" r="2" /><path d="M8 19h3a3 3 0 0 0 3-3V8a3 3 0 0 1 3-3" /></>,
@@ -49,6 +50,12 @@ const iconPaths: Record<IconName, ReactNode> = {
   leaf: <><path d="M5 20c0-9 5-15 15-15 0 10-6 15-15 15z" /><path d="M5 20 14 11" /></>,
   phone: <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" />,
   refresh: <><path d="M20 11a8 8 0 0 0-14.5-3M4 5v4h4M4 13a8 8 0 0 0 14.5 3M20 19v-4h-4" /></>,
+  layers: <><path d="m12 3 9 5-9 5-9-5z" /><path d="m3 13 9 5 9-5" /><path d="m3 17.5 9 5 9-5" opacity=".55" /></>,
+  locate: <><circle cx="12" cy="12" r="3.2" /><circle cx="12" cy="12" r="7.5" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></>,
+  directions: <><path d="M12.7 2.8a1 1 0 0 0-1.4 0l-8.5 8.5a1 1 0 0 0 0 1.4l8.5 8.5a1 1 0 0 0 1.4 0l8.5-8.5a1 1 0 0 0 0-1.4z" /><path d="M8.5 15v-3.2a1.8 1.8 0 0 1 1.8-1.8H15m0 0-2.2-2.2M15 10l-2.2 2.2" /></>,
+  share: <><circle cx="18" cy="5" r="2.6" /><circle cx="6" cy="12" r="2.6" /><circle cx="18" cy="19" r="2.6" /><path d="m8.3 10.8 7.4-4.4M8.3 13.2l7.4 4.4" /></>,
+  home: <><path d="m3 11 9-8 9 8" /><path d="M5.5 9.5V20h13V9.5" /><path d="M10 20v-5.5h4V20" /></>,
+  explore: <><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0z" /><circle cx="12" cy="10" r="2.5" /></>,
 };
 
 export function Icon({ name, size = 20, className }: { name: IconName; size?: number; className?: string }) {

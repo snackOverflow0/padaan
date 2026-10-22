@@ -13,3 +13,6 @@ Team GEIST, DMMMSU College of Information Technology, ITPE 106 Technopreneurship
 - **Saved**, **Offline region packs**, and a 3-step **Contribute** flow with a review tracker
 
 All route data is SAMPLE data (src/data.ts) until verified by local contributors. Edit it to add real routes.
+
+## Design
+The UI follows Google Maps: neutral surfaces, one blue accent, round map controls, red place pins with a blue location dot, a draggable bottom sheet on phones and a side panel on desktop. Light and dark follow the device. Colours live as tokens at the top of `src/index.css`; the theme layer is the last block in that file.

@@ -1,7 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type PointerEvent as RPE, type ReactNode } from "react";
 import { reverse, searchPlaces } from "./geo";
 import { Icon, type IconName } from "./icons";
-import { RoadArt } from "./scenes";
 import { Pic } from "./photos";
 import { MapView, type MapPoint } from "./map";
 import {
@@ -12,7 +11,7 @@ import {
 /* ───────────── starting point ───────────── */
 type StartCtxT = Place & { change: () => void; set: (p: Place) => void; pick: (p: { lat: number; lng: number }) => void };
 const StartCtx = createContext<StartCtxT>({ ...DEFAULT_START, change: () => {}, set: () => {}, pick: () => {} });
-const MODE_COLOR: Record<Mode, string> = { Jeepney: "#1a5a49", Tricycle: "#b9780a", "Habal-habal": "#c4573a", Bus: "#3b6ea5", Boat: "#1f8a96", Walk: "#6a7d4a" };
+const MODE_COLOR: Record<Mode, string> = { Jeepney: "#188038", Tricycle: "#e37400", "Habal-habal": "#d93025", Bus: "#1a73e8", Boat: "#129eaf", Walk: "#5f6368" };
 
 function StartModal({ st, onClose }: { st: StartCtxT; onClose: () => void }) {
   const [q, setQ] = useState(""), [res, setRes] = useState<Place[]>([]), [msg, setMsg] = useState("");
@@ -48,11 +47,11 @@ function StartModal({ st, onClose }: { st: StartCtxT; onClose: () => void }) {
 
 /* ───────────── constants & helpers ───────────── */
 const nav: { id: string; label: string; short: string; icon: IconName }[] = [
-  { id: "explore", label: "Explore", short: "Explore", icon: "compass" },
-  { id: "trip", label: "Trip planner", short: "Trips", icon: "route" },
+  { id: "explore", label: "Explore", short: "Explore", icon: "explore" },
+  { id: "trip", label: "Trip planner", short: "Trips", icon: "directions" },
   { id: "saved", label: "Saved", short: "Saved", icon: "bookmark" },
   { id: "offline", label: "Offline packs", short: "Offline", icon: "download" },
-  { id: "contribute", label: "Contribute", short: "Share", icon: "users" },
+  { id: "contribute", label: "Contribute", short: "Share", icon: "plus" },
 ];
 const VIEWS = [...nav.map((n) => n.id), "route"];
 const titles: Record<string, [string, string]> = {
@@ -123,7 +122,7 @@ function dayGeometry(list: Dest[], st: Place, open?: (id: string) => void) {
   list.forEach((d, k) => {
     const sp = STOPS[d.id] ?? []; let prev = "origin";
     const dest: MapPoint = { id: d.id, ...GEO[d.id], label: d.name, sub: d.place, kind: "dest", n: k + 1, onOpen: () => open?.(d.id) };
-    if (!sp.length) { pts.push(dest); lines.push(["origin", d.id, "#1a5a49", "Jeepney"]); return; }
+    if (!sp.length) { pts.push(dest); lines.push(["origin", d.id, "#188038", "Jeepney"]); return; }
     sp.forEach((s, i) => {
       const last = i === sp.length - 1, id = last ? d.id : `${d.id}-s${i}`, mode = d.legs[Math.min(i, d.legs.length - 1)].mode;
       pts.push(last ? dest : { id, lat: s.lat, lng: s.lng, label: s.name, sub: `${d.name} · step ${i + 1} (${mode})`, kind: "stop", n: i + 1 });
@@ -251,97 +250,129 @@ function DestCard({ d, ago, saved, onOpen, onSave }: { d: Dest; ago: number; sav
 }
 
 /* ───────────── pages ───────────── */
-function Explore({ saved, toggleSave, open, ago }: { saved: string[]; toggleSave: (id: string) => void; open: (id: string) => void; ago: (d: Dest) => number }) {
+const BrandPin = () => (
+  <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M12 2.2a7.6 7.6 0 0 0-7.6 7.6c0 5.4 7.6 12 7.6 12s7.6-6.6 7.6-12A7.6 7.6 0 0 0 12 2.2z" fill="#1a73e8" /><path d="M10 14.6V6.2h2.9a2.6 2.6 0 0 1 0 5.2H10" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>
+);
+/* ───────────── map-first Explore (Google-Maps-style sheet on phones, side panel on desktop) ───────────── */
+const SNAP = [0.17, 0.52, 0.9]; // sheet heights as a share of the map area: peek, half, full
+/** CSS height for a snap point; "full" always leaves the search pill and chips visible above the sheet. */
+const sheetH = (i: number) => (i === 2 ? "min(90%, calc(100% - 124px))" : `${SNAP[i] * 100}%`);
+
+function Explore({ saved, toggleSave, open, ago, onSearch, onHelp }: { saved: string[]; toggleSave: (id: string) => void; open: (id: string) => void; ago: (d: Dest) => number; onSearch: () => void; onHelp: () => void }) {
   const st = useContext(StartCtx);
-  const [mode, setMode] = useState<"grid" | "map">("grid"), [focus, setFocus] = useState<{ id: string; t: number } | null>(null);
-  const [q, setQ] = useState(""), [cat, setCat] = useState<"All" | Cat>("All"), [stat, setStat] = useState("All"), [bud, setBud] = useState(0), [sort, setSort] = useState<SortKey>("rec");
+  const [focus, setFocus] = useState<{ id: string; t: number } | null>(null);
+  const [q, setQ] = useState(""), [cat, setCat] = useState<"All" | Cat>("All"), [ver, setVer] = useState(false), [sort, setSort] = useState<SortKey>("rec");
   const list = useMemo(() => {
-    const f = DESTS.filter((d) => (cat === "All" || d.cat === cat) && (stat === "All" || (stat === "Verified") === d.verified) && (!bud || d.budget === bud) && (d.name + d.place + d.cat).toLowerCase().includes(q.toLowerCase()));
+    const f = DESTS.filter((d) => (cat === "All" || d.cat === cat) && (!ver || d.verified) && (d.name + d.place + d.cat).toLowerCase().includes(q.toLowerCase()));
     const key = (d: Dest) => (sort === "fare" ? legTotals(d).f0 : sort === "time" ? legTotals(d).t : sort === "fresh" ? ago(d) : 0);
     return sort === "rec" ? f : [...f].sort((a, b) => key(a) - key(b));
-  }, [q, cat, stat, bud, sort, ago]);
-  const people = new Set(DESTS.flatMap((d) => d.people.map((p) => p.n))).size;
-  const legs = DESTS.reduce((a, d) => a + d.legs.length, 0);
-  const dirty = q || cat !== "All" || stat !== "All" || bud || sort !== "rec";
-  const reset = () => { setQ(""); setCat("All"); setStat("All"); setBud(0); setSort("rec"); };
+  }, [q, cat, ver, sort, ago]);
+  const reset = () => { setQ(""); setCat("All"); setVer(false); setSort("rec"); };
+
+  // Bottom sheet: drag the handle (or tap / use arrow keys) to snap between peek, half and full.
+  const box = useRef<HTMLDivElement>(null), g = useRef({ y: 0, h: 0, moved: false });
+  const [snap, setSnap] = useState(1), [drag, setDrag] = useState<number | null>(null);
+  const px = (i: number) => { const h = box.current?.clientHeight ?? 700; return i === 2 ? Math.min(h * SNAP[2], h - 124) : h * SNAP[i]; };
+  const down = (e: RPE) => { e.currentTarget.setPointerCapture(e.pointerId); g.current = { y: e.clientY, h: px(snap), moved: false }; setDrag(px(snap)); };
+  const move = (e: RPE) => { if (drag === null) return; if (Math.abs(e.clientY - g.current.y) > 5) g.current.moved = true; setDrag(Math.min(px(2), Math.max(px(0), g.current.h + g.current.y - e.clientY))); };
+  const up = () => { if (drag === null) return; setSnap(!g.current.moved ? (snap + 1) % 3 : [0, 1, 2].reduce((a, i) => (Math.abs(px(i) - drag) < Math.abs(px(a) - drag) ? i : a), 0)); setDrag(null); };
+  const key = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowUp") { e.preventDefault(); setSnap(Math.min(2, snap + 1)); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); setSnap(Math.max(0, snap - 1)); }
+    else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSnap((snap + 1) % 3); }
+  };
+  useEffect(() => { document.body.classList.add("noscroll"); return () => document.body.classList.remove("noscroll"); }, []);
+  useEffect(() => { if (focus) document.getElementById(`row-${focus.id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [focus]);
+
+  const pts: MapPoint[] = [
+    { id: "origin", ...st, label: st.name.split(",")[0], sub: st.landmark ?? "Your starting point", kind: "origin" },
+    ...list.map((d, i): MapPoint => ({ id: d.id, ...GEO[d.id], label: d.name, sub: `${d.place} · ${fareText({ fMin: legTotals(d).f0, fMax: legTotals(d).f1 })}`, kind: "dest", n: i + 1, onOpen: () => open(d.id) })),
+  ];
   return (
-    <>
-      <section className="hero">
-        <div className="hero-copy">
-          <span className="pill"><Icon name="leaf" size={14} />Crowd-sourced · locally verified</span>
-          <h2>Know the road <em>before</em> you go.</h2>
-          <p>Leg-by-leg directions, fares and landmarks for places Google Maps skips, confirmed by the people who ride these roads.</p>
-          <label className="hero-search">
-            <Icon name="search" size={20} />
-            <input type="search" placeholder="Try “Tangadan”, “beach” or “San Juan”" aria-label="Search destinations" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && document.getElementById("results")?.scrollIntoView({ behavior: "smooth" })} />
-          </label>
-          <button className="start-chip" onClick={st.change}><Icon name="pin" size={16} />Starting from <b>{st.name.split(",")[0]}</b><span>Change</span></button>
-          <div className="hero-cta">
-            <button className="btn lime" onClick={() => { setMode("map"); document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }); }}><Icon name="map" size={18} />Browse the map</button>
-            <button className="btn outline-light" onClick={() => { setMode("grid"); document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }); }}>See all destinations</button>
-          </div>
-          <dl className="hero-stats">
-            <div><dt>Destinations</dt><dd>{DESTS.length}</dd></div>
-            <div><dt>Route legs</dt><dd>{legs}</dd></div>
-            <div><dt>Contributors</dt><dd>{people}</dd></div>
-          </dl>
-        </div>
-        <div className="hero-art"><RoadArt /></div>
-      </section>
-
-      <section className="filters" aria-label="Filter destinations">
-        <div className="chips" role="group" aria-label="Category">
-          {(["All", ...CATS] as const).map((c) => (
-            <button key={c} className={`chip ${cat === c ? "on" : ""}`} aria-pressed={cat === c} onClick={() => setCat(c)}>{c !== "All" && <Icon name={catIcon[c]} size={15} />}{c}</button>
-          ))}
-        </div>
-        <div className="filter-tools">
-          <div className="seg" role="group" aria-label="Route status">
-            {["All", "Verified", "Pending"].map((s) => { const v = s === "Pending" ? "Sample" : s; return <button key={s} className={stat === v ? "on" : ""} aria-pressed={stat === v} onClick={() => setStat(v)}>{s}</button>; })}
-          </div>
-          <div className="seg" role="group" aria-label="Budget">
-            {[1, 2, 3].map((b) => <button key={b} className={bud === b ? "on" : ""} aria-pressed={bud === b} aria-label={`Budget level ${b} of 3`} onClick={() => setBud(bud === b ? 0 : b)}>{"₱".repeat(b)}</button>)}
-          </div>
-          <label className="select-wrap"><span className="sr">Sort by</span><Icon name="sliders" size={16} />
-            <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>{SORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-          </label>
-        </div>
-      </section>
-
-      <div className="results-head" id="results" aria-live="polite">
-        <h3>{list.length} {list.length === 1 ? "destination" : "destinations"}<small> across Region I</small></h3>
-        <div className="head-tools">
-          {dirty && <button className="link" onClick={reset}><Icon name="refresh" size={14} />Clear filters</button>}
-          <div className="seg view-toggle" role="group" aria-label="View">
-            <button className={mode === "grid" ? "on" : ""} aria-pressed={mode === "grid"} onClick={() => setMode("grid")}><Icon name="sliders" size={16} />List</button>
-            <button className={mode === "map" ? "on" : ""} aria-pressed={mode === "map"} onClick={() => setMode("map")}><Icon name="map" size={16} />Map</button>
-          </div>
-        </div>
+    <div className={`gm ${snap === 2 && drag === null ? "sheet-full" : ""} ${drag !== null ? "dragging" : ""}`} ref={box}>
+      <div className="gm-map">
+        <MapView bleed dock={drag !== null ? `${drag}px` : sheetH(snap)} primary={{ icon: "directions", label: `Starting from ${st.name.split(",")[0]}. Change starting point`, onClick: st.change }} onPick={st.pick} label="Map of destinations" height="100%" focus={focus} onSelect={(id) => { setFocus({ id, t: Date.now() }); setSnap(1); }} points={pts} />
       </div>
-      {!list.length
-        ? <Empty icon="search" title="No destinations match" text="Try a different category or clear your filters to see everything." cta="Clear filters" onCta={reset} />
-        : mode === "grid"
-          ? <div className="grid">{list.map((d) => <DestCard key={d.id} d={d} ago={ago(d)} saved={saved.includes(d.id)} onOpen={() => open(d.id)} onSave={() => toggleSave(d.id)} />)}</div>
-          : (
-            <div className="mapsplit">
-              <MapView onPick={st.pick} label="Map of destinations" height="100%" className="tall" focus={focus} onSelect={(id) => setFocus({ id, t: Date.now() })}
-                points={[{ id: "origin", ...st, label: st.name.split(",")[0], sub: (st.landmark ?? "Your starting point"), kind: "origin" }, ...list.map((d, i): MapPoint => ({ id: d.id, ...GEO[d.id], label: d.name, sub: `${d.place} · ${fareText({ fMin: legTotals(d).f0, fMax: legTotals(d).f1 })}`, kind: "dest", n: i + 1, onOpen: () => open(d.id) }))]} />
-              <ul className="maplist">
-                {list.map((d, i) => (
-                  <li key={d.id}><button className={focus?.id === d.id ? "on" : ""} onClick={() => setFocus({ id: d.id, t: Date.now() })}>
-                    <span className="mthumb"><Pic d={d} /><b>{i + 1}</b></span>
-                    <span className="mtxt"><strong>{d.name}</strong><small>{d.place}</small><small>{fareText({ fMin: legTotals(d).f0, fMax: legTotals(d).f1 })} · ~{hm(legTotals(d).t)}</small></span>
-                  </button><button className="icon-btn sm" aria-label={`Open ${d.name}`} onClick={() => open(d.id)}><Icon name="chevron" size={16} /></button></li>
-                ))}
-              </ul>
-            </div>
-          )}
 
-      <section className="next">
-        <div><span className="eyebrow">Roadmap</span><h3>More regions on the way</h3></div>
-        <ul>{["Baguio", "Sagada", "Banaue", "Sanga", "Camiguin", "Bohol", "Palawan", "Cebu"].map((c) => <li key={c}>{c}</li>)}</ul>
+      <header className="gm-top">
+        <div className="gm-brand"><img src="/logo-mark.png" alt="" /><div><b>padaan</b><small>The Road There</small></div></div>
+        <div className="gm-search">
+          <button className="gm-search-main" onClick={onSearch} aria-label="Search destinations"><span className="gm-logo"><img src="/logo-mark.png" alt="" /></span><span>Search destinations</span></button>
+          <button className="gm-avatar" onClick={onHelp} aria-label="Help and tips">GT</button>
+        </div>
+        <label className="gm-find"><Icon name="search" size={18} /><input type="search" placeholder="Filter destinations" aria-label="Filter destinations" value={q} onChange={(e) => setQ(e.target.value)} /></label>
+        <div className="gm-chips" role="group" aria-label="Filters">
+          <button className="gm-chip start" onClick={st.change}><Icon name="pin" size={16} />From {st.name.split(",")[0]}</button>
+          {CATS.map((c) => <button key={c} className={`gm-chip ${cat === c ? "on" : ""}`} aria-pressed={cat === c} onClick={() => setCat(cat === c ? "All" : c)}><Icon name={catIcon[c]} size={16} />{c}</button>)}
+          <button className={`gm-chip ${ver ? "on" : ""}`} aria-pressed={ver} onClick={() => setVer(!ver)}><Icon name="shield" size={16} />Verified</button>
+        </div>
+      </header>
+
+      <section className={`gm-sheet ${snap === 2 ? "full" : ""} ${drag !== null ? "dragging" : ""}`} style={{ height: drag !== null ? drag : sheetH(snap) }} aria-label="Destinations">
+        <button className="gm-grab" aria-label="Resize destination list" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onKeyDown={key}><i /></button>
+        <div className="gm-head">
+          <div className="gm-title"><h2>Explore</h2><p>{list.length} {list.length === 1 ? "destination" : "destinations"} across Region I</p></div>
+          <label className="gm-sort"><span className="sr">Sort by</span><Icon name="sliders" size={16} /><select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>{SORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+        </div>
+        <div className="gm-scroll">
+          {!list.length ? <Empty icon="search" title="No destinations match" text="Try another category or clear your filters." cta="Clear filters" onCta={reset} /> : (
+            <ul className="gm-list">
+              {list.map((d) => { const t = legTotals(d), on = saved.includes(d.id); return (
+                <li key={d.id} id={`row-${d.id}`} className={`gm-item ${focus?.id === d.id ? "on" : ""}`}>
+                  <button className="gm-row" onClick={() => open(d.id)}>
+                    <span className="gm-txt">
+                      <strong>{d.name}{d.verified && <span className="gm-ok" title="Verified route"><Icon name="check" size={11} /></span>}</strong>
+                      <small className="gm-sub">{d.cat} · {d.place}</small>
+                      <small className="gm-meta"><b>{fareText({ fMin: t.f0, fMax: t.f1 })}</b> · ~{hm(t.t)} · {d.legs.length} {d.legs.length === 1 ? "leg" : "legs"}</small>
+                      <ModeStrip d={d} />
+                    </span>
+                    <span className="gm-thumb"><Pic d={d} /></span>
+                  </button>
+                  <div className="gm-acts">
+                    <button className="pillbtn pri" onClick={() => open(d.id)}><Icon name="route" size={16} />Route</button>
+                    <button className={`pillbtn ${on ? "on" : ""}`} aria-pressed={on} aria-label={on ? `Remove ${d.name} from saved` : `Save ${d.name}`} onClick={() => toggleSave(d.id)}><Icon name={on ? "bookmark-fill" : "bookmark"} size={16} />{on ? "Saved" : "Save"}</button>
+                  </div>
+                </li>
+              ); })}
+            </ul>
+          )}
+          <div className="gm-soon"><b>More regions on the way</b><div>{["Baguio", "Sagada", "Banaue", "Camiguin", "Bohol", "Palawan"].map((c) => <span key={c}>{c}</span>)}</div></div>
+        </div>
       </section>
-    </>
+    </div>
+  );
+}
+
+function BottomNav({ view, go, ready, savedN }: { view: string; go: (v: string) => void; ready: string[]; savedN: number }) {
+  const you = view === "saved" || view === "trip" || view === "offline";
+  const items: [string, string, IconName, boolean][] = [
+    ["explore", "Explore", "explore", view === "explore" || view === "route"],
+    ["saved", "You", you ? "bookmark-fill" : "bookmark", you],
+    ["contribute", "Contribute", "plus", view === "contribute"],
+  ];
+  return (
+    <nav className="bnav" aria-label="Main">
+      <img className="bn-brand" src="/logo-mark.png" alt="Padaan" />
+      {items.map(([id, label, ic, on]) => (
+        <button key={id} className={`bn ${on ? "on" : ""}`} aria-current={on ? "page" : undefined} onClick={() => go(id)}>
+          <span className="bn-ic"><Icon name={ic} size={22} />{id === "saved" && (savedN > 0 || ready.length > 0) && <i className="bn-dot" />}</span>
+          <span className="bn-lb">{label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function YouHeader({ view, go, unread, onBell, start, onStart }: { view: string; go: (v: string) => void; unread: boolean; onBell: () => void; start: string; onStart: () => void }) {
+  const tabs: [string, string, IconName][] = [["saved", "Saved", "bookmark"], ["trip", "Trips", "route"], ["offline", "Offline", "download"]];
+  return (
+    <div className="you-head">
+      <div className="you-title"><h2>You</h2><button className="icon-btn" aria-label={unread ? "Notifications, unread" : "Notifications"} onClick={onBell}><Icon name="bell" size={20} />{unread && <i className="ping" />}</button></div>
+      <button className="you-row" onClick={onStart}><span className="you-ic"><Icon name="pin" size={20} /></span><span><b>Starting point</b><small>{start}</small></span><Icon name="chevron" size={18} /></button>
+      <div className="you-tabs" role="group" aria-label="Your things">
+        {tabs.map(([id, label, ic]) => <button key={id} className={view === id ? "on" : ""} aria-pressed={view === id} onClick={() => go(id)}><Icon name={ic} size={16} />{label}</button>)}
+      </div>
+    </div>
   );
 }
 
@@ -354,97 +385,87 @@ function RouteDetail({ d, ago, saved, onSave, onAdd, inTrip, onConfirm, onBack }
     { id: d.id, ...GEO[d.id], label: d.name, sub: d.place, kind: "dest", n: sp.length || 1 }];
   const ids = routePts.map((x) => x.id);
   const routeLines = ids.slice(1).map((id, i) => [ids[i], id, MODE_COLOR[d.legs[Math.min(i, d.legs.length - 1)].mode], d.legs[Math.min(i, d.legs.length - 1)].mode] as [string, string, string, string]);
-  const addLabel = inTrip ? "In your trip · Open planner" : "Add to trip";
+  const addLabel = inTrip ? "In your trip" : "Add to trip";
+  const g = directionsLinks(d.id, st);
+  const jumpTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   return (
-    <>
-      <button className="back" onClick={onBack}><Icon name="arrow-left" size={17} />All destinations</button>
-      <header className="d-hero">
-        <Pic d={d} credit />
-        <div className="d-hero-shade" />
-        <div className="d-hero-top"><Badge d={d} onDark /><button className={`save ${saved ? "on" : ""}`} aria-pressed={saved} aria-label={saved ? "Remove from saved" : "Save destination"} onClick={onSave}><Icon name={saved ? "bookmark-fill" : "bookmark"} size={18} /></button></div>
-        <div className="d-hero-copy">
-          <span className="kicker light"><Icon name={catIcon[d.cat]} size={14} />{d.cat}</span>
+    <div className="rd">
+      <div className="rd-map" id="route-map">
+        <MapView bleed onPick={st.pick} label={`Map from ${st.name.split(",")[0]} to ${d.name}`} height="100%" points={routePts} lines={routeLines}
+          primary={{ icon: "directions", label: "Open in Google Maps", onClick: () => window.open(g.google, "_blank", "noopener") }} />
+      </div>
+      <button className="rd-back" onClick={onBack} aria-label="Back to all destinations"><Icon name="arrow-left" size={22} /><span>All destinations</span></button>
+
+      <section className="rd-sheet" aria-label={`How to get to ${d.name}`}>
+        <i className="rd-grab" aria-hidden="true" />
+        <header className="rd-head">
           <h2>{d.name}</h2>
-          <p><Icon name="pin" size={16} />{d.place}</p>
-        </div>
-      </header>
+          <p className="rd-cat"><Icon name={catIcon[d.cat]} size={15} />{d.cat} · {d.place}</p>
+          <p className="rd-status"><Badge d={d} /><Freshness days={ago} /></p>
+        </header>
 
-      <div className="d-grid">
-        <div className="d-main">
-          <p className="lead">{d.blurb}</p>
-          <dl className="facts">
-            <div><dt><Icon name="pin" size={15} />From</dt><dd>{st.name.split(",")[0]}</dd></div>
-            <div><dt><Icon name="wallet" size={15} />Est. fare</dt><dd>{fareText({ fMin: t.f0, fMax: t.f1 })}</dd></div>
-            <div><dt><Icon name="clock" size={15} />Travel time</dt><dd>~{hm(t.t)}</dd></div>
-            <div><dt><Icon name="swap" size={15} />Transfers</dt><dd>{d.legs.length - 1}</dd></div>
-          </dl>
-
-          <nav className="jump" aria-label="On this page">
-            {[["route-map", "map", "Map"], ["route-steps", "route", "Steps"], ["route-trust", "shield", "Trust"]].map(([id, ic, l]) => (
-              <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })}><Icon name={ic as IconName} size={16} />{l}</button>
-            ))}
-          </nav>
-
-          {km(st, DEFAULT_START) > 3 && <p className="warn start-warn"><Icon name="alert" size={18} /><span>The steps below begin at San Fernando. You are about {Math.round(km(st, DEFAULT_START))} km from there, so use the Google Maps or OpenStreetMap links to reach the first stop.</span></p>}
-          <div className="sec-head" id="route-steps"><h3>How to get there</h3><span>{d.legs.length} local legs</span></div>
-          <ol className="journey">
-            <li className="jstop start"><span className="jnode"><Icon name="pin" size={14} /></span><div><strong>Start · {st.name.split(",")[0]}</strong><small>{(st.landmark ?? "Your starting point")}</small></div></li>
-            {d.legs.map((l, i) => (
-              <li className="leg" key={i} data-k={modeKey(l.mode)}>
-                <span className="jnode lg"><Icon name={modeIcon[l.mode]} size={20} /></span>
-                <article>
-                  <div className="leg-top"><span className="mode-tag">Step {i + 1} · {l.mode}</span><Freshness days={ago} /></div>
-                  <h4>{l.from}<Icon name="arrow" size={16} />{l.to}</h4>
-                  <div className="leg-stats">
-                    <span><Icon name="wallet" size={15} /><small>Fare</small><b>{fareText(l)}</b></span>
-                    <span><Icon name="clock" size={15} /><small>Time</small><b>{l.tMin === l.tMax ? `${l.tMin} min` : `${l.tMin}–${l.tMax} min`}</b></span>
-                  </div>
-                  <p className="look"><Icon name="info" size={16} /><span><b>Look for</b>{l.look}</span></p>
-                </article>
-              </li>
-            ))}
-            <li className="jstop end"><span className="jnode"><Icon name="flag" size={14} /></span><div><strong>Arrive · {d.name}</strong><small>{d.place}</small></div></li>
-          </ol>
+        <div className="rd-acts" role="group" aria-label="Actions">
+          <button className="pillbtn pri lg" onClick={onAdd}><Icon name={inTrip ? "route" : "plus"} size={18} />{addLabel}</button>
+          <button className={`pillbtn lg ${saved ? "on" : ""}`} aria-pressed={saved} onClick={onSave}><Icon name={saved ? "bookmark-fill" : "bookmark"} size={18} />{saved ? "Saved" : "Save"}</button>
+          <button className="pillbtn lg" onClick={onConfirm}><Icon name="check" size={18} />Still accurate?</button>
+          <a className="pillbtn lg" href={g.google} target="_blank" rel="noreferrer"><Icon name="directions" size={18} />Google Maps</a>
+          <a className="pillbtn lg" href={g.osm} target="_blank" rel="noreferrer"><Icon name="map" size={18} />OpenStreetMap</a>
         </div>
 
-        <aside className="d-side">
-          <section className="route-map-card" id="route-map">
-            <div className="sec-head"><h3>Route map</h3><span>≈ {Math.round(km(st, GEO[d.id]))} km straight line</span></div>
-            <div className="route-map-body"><MapView onPick={st.pick} label={`Map from ${st.name.split(",")[0]} to ${d.name}`} height="100%" points={routePts} lines={routeLines} /></div>
-            <div className="map-actions">
-              <p className="muted"><Icon name="info" size={15} />Lines follow real roads from OpenStreetMap, like Google Maps. Stops are approximate; the last stretch to a trailhead or island may be off-road. Right-click or long-press to change your start. The compass follows your live location.</p>
-              <div className="row2">
-                <a className="btn secondary sm" href={directionsLinks(d.id, st).google} target="_blank" rel="noreferrer"><Icon name="arrow" size={15} />Open in Google Maps</a>
-                <a className="btn secondary sm" href={directionsLinks(d.id, st).osm} target="_blank" rel="noreferrer"><Icon name="arrow" size={15} />OpenStreetMap</a>
-              </div>
-            </div>
-          </section>
-          <section className="trust" id="route-trust">
-            <span className="kicker light"><Icon name="shield" size={14} />Transparency</span>
-            <h3>Why this route can be trusted</h3>
-            <ul>
-              <li><Icon name="check" size={16} />{d.people.length > 1 ? "Route corroborated" : "Single source, awaiting a second confirmation"}</li>
-              <li><Icon name="check" size={16} />Local contributor included</li>
-              <li><Icon name="check" size={16} />Last checked {dateAgo(ago)}</li>
-            </ul>
-          </section>
-          <section className="panel">
-            <h4>Verified by {d.people.length} {d.people.length === 1 ? "contributor" : "contributors"}</h4>
-            <ul className="people">{d.people.map((p) => <li key={p.n}><span className="avatar sm">{p.n.slice(0, 2).toUpperCase()}</span><div><b>{p.n}</b><small>{p.role}</small></div><Icon name="check" size={16} /></li>)}</ul>
-          </section>
-          <p className="warn"><Icon name="alert" size={18} /><span>Local conditions can change. Confirm locally when necessary, especially after severe weather.</span></p>
-          <div className="actions">
-            <button className="btn primary lg" onClick={onAdd}><Icon name={inTrip ? "route" : "plus"} size={18} />{addLabel}</button>
-            <div className="row2"><button className="btn secondary" onClick={onSave}><Icon name={saved ? "bookmark-fill" : "bookmark"} size={17} />{saved ? "Saved" : "Save"}</button><button className="btn secondary" onClick={onConfirm}><Icon name="check" size={17} />Still accurate?</button></div>
-          </div>
-        </aside>
-      </div>
+        <dl className="facts">
+          <div><dt><Icon name="wallet" size={15} />Est. fare</dt><dd>{fareText({ fMin: t.f0, fMax: t.f1 })}</dd></div>
+          <div><dt><Icon name="clock" size={15} />Travel time</dt><dd>~{hm(t.t)}</dd></div>
+          <div><dt><Icon name="swap" size={15} />Transfers</dt><dd>{d.legs.length - 1}</dd></div>
+          <div><dt><Icon name="pin" size={15} />From</dt><dd>{st.name.split(",")[0]}</dd></div>
+        </dl>
 
-      <div className="cta-bar">
-        <button className="btn secondary icon-only" aria-label={saved ? "Remove from saved" : "Save"} onClick={onSave}><Icon name={saved ? "bookmark-fill" : "bookmark"} size={20} /></button>
-        <button className="btn primary lg" onClick={onAdd}><Icon name={inTrip ? "route" : "plus"} size={18} />{addLabel}</button>
-      </div>
-    </>
+        <div className="rd-photo"><Pic d={d} credit /></div>
+        <p className="lead">{d.blurb}</p>
+
+        <nav className="jump" aria-label="On this page">
+          {([["route-steps", "route", "Steps"], ["route-trust", "shield", "Trust"], ["route-more", "info", "Notes"]] as [string, IconName, string][]).map(([id, ic, l]) => (
+            <button key={id} onClick={() => jumpTo(id)}><Icon name={ic} size={16} />{l}</button>
+          ))}
+        </nav>
+
+        {km(st, DEFAULT_START) > 3 && <p className="warn start-warn"><Icon name="alert" size={18} /><span>The steps below begin at San Fernando. You are about {Math.round(km(st, DEFAULT_START))} km from there, so use the Google Maps or OpenStreetMap links to reach the first stop.</span></p>}
+        <div className="sec-head" id="route-steps"><h3>How to get there</h3><span>{d.legs.length} local legs · ≈ {Math.round(km(st, GEO[d.id]))} km straight line</span></div>
+        <ol className="journey">
+          <li className="jstop start"><span className="jnode"><Icon name="pin" size={14} /></span><div><strong>Start · {st.name.split(",")[0]}</strong><small>{(st.landmark ?? "Your starting point")}</small></div></li>
+          {d.legs.map((l, i) => (
+            <li className="leg" key={i} data-k={modeKey(l.mode)}>
+              <span className="jnode lg"><Icon name={modeIcon[l.mode]} size={20} /></span>
+              <article>
+                <div className="leg-top"><span className="mode-tag">Step {i + 1} · {l.mode}</span></div>
+                <h4>{l.from}<Icon name="arrow" size={16} />{l.to}</h4>
+                <div className="leg-stats">
+                  <span><Icon name="wallet" size={15} /><small>Fare</small><b>{fareText(l)}</b></span>
+                  <span><Icon name="clock" size={15} /><small>Time</small><b>{l.tMin === l.tMax ? `${l.tMin} min` : `${l.tMin}–${l.tMax} min`}</b></span>
+                </div>
+                <p className="look"><Icon name="info" size={16} /><span><b>Look for</b>{l.look}</span></p>
+              </article>
+            </li>
+          ))}
+          <li className="jstop end"><span className="jnode"><Icon name="flag" size={14} /></span><div><strong>Arrive · {d.name}</strong><small>{d.place}</small></div></li>
+        </ol>
+
+        <section className="trust" id="route-trust">
+          <span className="kicker"><Icon name="shield" size={14} />Transparency</span>
+          <h3>Why this route can be trusted</h3>
+          <ul>
+            <li><Icon name="check" size={16} />{d.people.length > 1 ? "Route corroborated" : "Single source, awaiting a second confirmation"}</li>
+            <li><Icon name="check" size={16} />Local contributor included</li>
+            <li><Icon name="check" size={16} />Last checked {dateAgo(ago)}</li>
+          </ul>
+        </section>
+        <section className="panel" id="route-more">
+          <h4>Verified by {d.people.length} {d.people.length === 1 ? "contributor" : "contributors"}</h4>
+          <ul className="people">{d.people.map((p) => <li key={p.n}><span className="avatar sm">{p.n.slice(0, 2).toUpperCase()}</span><div><b>{p.n}</b><small>{p.role}</small></div><Icon name="check" size={16} /></li>)}</ul>
+        </section>
+        <p className="warn"><Icon name="alert" size={18} /><span>Local conditions can change. Confirm locally when necessary, especially after severe weather.</span></p>
+        <p className="muted rd-hint"><Icon name="info" size={15} />Lines follow real roads from OpenStreetMap. Stops are approximate; the last stretch to a trailhead or island may be off-road. Right-click or long-press the map to change your start.</p>
+      </section>
+    </div>
   );
 }
 
@@ -674,7 +695,7 @@ export default function App() {
   const [prog, setProg] = useState<Record<string, number>>({});
   const [start, setStart] = useStored<Place>("start", DEFAULT_START), [startOpen, setStartOpen] = useState(false);
   const [palette, setPalette] = useState(false), [help, setHelp] = useState(false), [bell, setBell] = useState(false);
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState(""), [notifOpen, setNotifOpen] = useState(false);
   const toastTimer = useRef<number>(0);
   const say = (m: string) => { setToast(m); window.clearTimeout(toastTimer.current); toastTimer.current = window.setTimeout(() => setToast(""), 2600); };
   const go = (v: string) => { setBell(false); location.hash = `#/${v}`; };
@@ -730,13 +751,16 @@ export default function App() {
 
   return (
     <StartCtx.Provider value={ctx}>
-    <div className="app">
+    <div className={`app v-${view}`}>
+      {notifOpen && <Modal title="Notifications" onClose={() => { setNotifOpen(false); setRead(true); }}><ul className="notif-list">{NOTIFS.map((n) => <li key={n.t}><span><Icon name={n.i} size={16} /></span>{n.t}</li>)}</ul></Modal>}
       <a className="skip" href="#main">Skip to content</a>
       <Rail view={view} go={go} ready={ready} savedN={saved.length} />
+      <BottomNav view={view} go={go} ready={ready} savedN={saved.length} />
       <div className="stage">
         <Topbar start={start.name.split(",")[0]} onStart={() => setStartOpen(true)} view={view} unread={!read} onSearch={() => setPalette(true)} onHelp={() => setHelp(true)} bell={bell} onBell={() => setBell(!bell)} onRead={() => { setRead(true); setBell(false); }} onHome={() => go("explore")} />
         <main id="main" className={`page v-${view}`} key={view + (view === "route" ? sel : "")}>
-          {view === "explore" && <Explore saved={saved} toggleSave={toggleSave} open={open} ago={ago} />}
+          {(view === "saved" || view === "trip" || view === "offline") && <YouHeader view={view} go={go} unread={!read} onBell={() => setNotifOpen(true)} start={start.name.split(",")[0]} onStart={() => setStartOpen(true)} />}
+          {view === "explore" && <Explore saved={saved} toggleSave={toggleSave} open={open} ago={ago} onSearch={() => setPalette(true)} onHelp={() => setHelp(true)} />}
           {view === "route" && <RouteDetail d={d} ago={ago(d)} saved={saved.includes(d.id)} onSave={() => toggleSave(d.id)} inTrip={stops.includes(d.id)} onBack={() => history.length > 1 ? history.back() : go("explore")}
             onAdd={() => { if (!stops.includes(d.id)) { setStops([...stops, d.id]); say(`${d.name} added to your trip`); } go("trip"); }}
             onConfirm={() => { setConfirmed({ ...confirmed, [d.id]: 0 }); say("Thanks. Marked as confirmed today."); }} />}

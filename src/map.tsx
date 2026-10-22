@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Icon } from "./icons";
+import { Icon, type IconName } from "./icons";
 import { getPhoto } from "./photos";
 import { km } from "./data";
 import { roadRoute } from "./geo";
@@ -19,10 +19,16 @@ interface Props {
   onSelect?: (id: string) => void;
   className?: string;
   label: string;
+  /** Full-bleed map (sits under a bottom sheet): hides the embedded-map extras. */
+  bleed?: boolean;
+  /** CSS length of whatever covers the bottom of the map (a sheet); floating controls ride above it. */
+  dock?: string;
+  /** Optional primary round action (Google-Maps-style "directions" button). */
+  primary?: { icon: IconName; label: string; onClick: () => void };
 }
 
 const BASES = [
-  { name: "Streets", url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", max: 19, attr: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>' },
+  { name: "Default", url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", max: 19, attr: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>' },
   { name: "Terrain", url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", max: 17, attr: '© OpenStreetMap, SRTM · © <a href="https://opentopomap.org" target="_blank" rel="noreferrer">OpenTopoMap</a>' },
   { name: "Satellite", url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", max: 18, attr: "Imagery © Esri, Maxar, Earthstar Geographics" },
 ];
@@ -30,7 +36,8 @@ const BASES = [
 const pinHtml = (p: MapPoint) =>
   p.kind === "origin" ? `<div class="pin origin"><span>●</span></div>` : p.kind === "stop" ? `<div class="pin stop"><span>${p.n}</span></div>` : `<div class="pin dest"><span>${p.n ?? "★"}</span></div>`;
 
-export function MapView({ points, lines = [], onPick, height = "420px", focus, onSelect, className = "", label }: Props) {
+export function MapView({ points, lines = [], onPick, height = "420px", focus, onSelect, className = "", label, bleed = false, dock, primary }: Props) {
+  const [layersOpen, setLayersOpen] = useState(false);
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const layer = useRef<L.LayerGroup | null>(null);
@@ -88,15 +95,15 @@ export function MapView({ points, lines = [], onPick, height = "420px", focus, o
     const todo = lines.filter(([x, y]) => byId[x] && byId[y]).length;
     lines.forEach(([x, y, c, mode]) => {
       if (!byId[x] || !byId[y]) return;
-      const A = byId[x], B = byId[y], col = c ?? "#1a5a49";
+      const A = byId[x], B = byId[y], col = c ?? "#1a73e8";
       const ll: L.LatLngTuple[] = [[A.lat, A.lng], [B.lat, B.lng]];
       // placeholder straight line until the real road arrives
-      const ph = L.featureGroup([L.polyline(ll, { color: "#fffdf8", weight: 7, opacity: .9 }), L.polyline(ll, { color: col, weight: 3.5, dashArray: "1 9", lineCap: "round" })]).addTo(g);
+      const ph = L.featureGroup([L.polyline(ll, { color: "#ffffff", weight: 7, opacity: .9 }), L.polyline(ll, { color: col, weight: 3.5, dashArray: "1 9", lineCap: "round" })]).addTo(g);
       const fin = (rd: { pts: [number, number][]; km: number; min: number } | null) => {
         if (token !== gen.current) return;
         if (rd) {
           g.removeLayer(ph);
-          L.polyline(rd.pts, { color: "#fffdf8", weight: 9, opacity: .95, lineJoin: "round" }).addTo(g);
+          L.polyline(rd.pts, { color: "#ffffff", weight: 9, opacity: .95, lineJoin: "round" }).addTo(g);
           L.polyline(rd.pts, { color: col, weight: 5, opacity: .95, lineJoin: "round" }).addTo(g);
           tot.km += rd.km; tot.min += rd.min; tot.n++; all.push(...rd.pts);
         }
@@ -109,7 +116,7 @@ export function MapView({ points, lines = [], onPick, height = "420px", focus, o
     });
     pts.forEach((p) => {
       const mk = L.marker([p.lat, p.lng], {
-        icon: L.divIcon({ className: "pin-wrap", html: pinHtml(p), iconSize: [40, 48], iconAnchor: p.kind === "stop" ? [20, 24] : [20, 46], popupAnchor: [0, p.kind === "stop" ? -20 : -44] }),
+        icon: L.divIcon({ className: "pin-wrap", html: pinHtml(p), iconSize: [40, 48], iconAnchor: p.kind === "dest" ? [20, 46] : [20, 24], popupAnchor: [0, p.kind === "dest" ? -44 : -20] }),
         title: p.label, keyboard: true, riseOnHover: true,
       }).addTo(g);
       const box = document.createElement("div"); box.className = "pop";
@@ -151,9 +158,9 @@ export function MapView({ points, lines = [], onPick, height = "420px", focus, o
     let first = true;
     const id = navigator.geolocation.watchPosition((pos) => {
       const ll: L.LatLngTuple = [pos.coords.latitude, pos.coords.longitude];
-      if (!me.current) me.current = L.circleMarker(ll, { radius: 8, color: "#fff", weight: 3, fillColor: "#3b6ea5", fillOpacity: 1 }).addTo(m).bindTooltip("You are here");
+      if (!me.current) me.current = L.circleMarker(ll, { radius: 8, color: "#fff", weight: 3, fillColor: "#1a73e8", fillOpacity: 1 }).addTo(m).bindTooltip("You are here");
       else me.current.setLatLng(ll);
-      if (!acc.current) acc.current = L.circle(ll, { radius: pos.coords.accuracy, weight: 0, fillColor: "#3b6ea5", fillOpacity: .12, interactive: false }).addTo(m);
+      if (!acc.current) acc.current = L.circle(ll, { radius: pos.coords.accuracy, weight: 0, fillColor: "#1a73e8", fillOpacity: .14, interactive: false }).addTo(m);
       else acc.current.setLatLng(ll).setRadius(pos.coords.accuracy);
       if (first) { first = false; setNote(""); m.flyTo(ll, Math.max(m.getZoom(), 14), { duration: .8 }); }
       else if (follow.current) m.panTo(ll, { animate: true, duration: .8 });
@@ -171,7 +178,7 @@ export function MapView({ points, lines = [], onPick, height = "420px", focus, o
       const m = map.current; if (!m) return;
       const ll: L.LatLngTuple = [pos.coords.latitude, pos.coords.longitude];
       me.current?.remove();
-      me.current = L.circleMarker(ll, { radius: 8, color: "#fff", weight: 3, fillColor: "#3b6ea5", fillOpacity: 1 }).addTo(m).bindTooltip("You are here");
+      me.current = L.circleMarker(ll, { radius: 8, color: "#fff", weight: 3, fillColor: "#1a73e8", fillOpacity: 1 }).addTo(m).bindTooltip("You are here");
       m.flyTo(ll, 12); setNote("");
     }, () => setNote("Couldn't get your location. Check the site's location permission."), { timeout: 8000 });
   };
@@ -179,21 +186,33 @@ export function MapView({ points, lines = [], onPick, height = "420px", focus, o
   useEffect(() => { if (!note) return; const t = setTimeout(() => setNote(""), 4000); return () => clearTimeout(t); }, [note]);
 
   return (
-    <div className={`mapbox ${full ? "fs" : ""} ${className}`} style={full ? undefined : { height }}>
+    <div className={`mapbox ${full ? "fs" : ""} ${bleed ? "bleed" : ""} ${className}`} data-base={BASES[baseIx].name.toLowerCase()} style={{ ...(full ? {} : { height }), ["--dock" as string]: dock ?? "0px" }}>
       <div ref={el} className="map" role="region" aria-label={label} />
-      <div className="map-tools">
-        <button className="map-btn" onClick={fit} aria-label="Fit all pins" title="Fit all pins"><Icon name="map" size={18} /></button>
-        <button className="map-btn" onClick={liveBtn} aria-pressed={live} aria-label={!live ? "Follow my location" : following ? "Stop following" : "Re-center on me"} title={!live ? "Follow my location live" : following ? "Stop following" : "Re-center on me"}><Icon name={live && !following ? "pin" : "compass"} size={18} /></button>
-        <button className="map-btn" onClick={() => setFull(!full)} aria-pressed={full} aria-label={full ? "Exit full screen" : "Full screen map"} title={full ? "Exit full screen" : "Full screen"}><Icon name={full ? "x" : "sliders"} size={18} /></button>
+      <div className="map-fabs">
+        <div className="map-layers-wrap">
+          {layersOpen && (
+            <div className="map-layers" role="group" aria-label="Map style">
+              {BASES.map((b, i) => (
+                <button key={b.name} className={i === baseIx ? "on" : ""} aria-pressed={i === baseIx} onClick={() => { setBaseIx(i); setLayersOpen(false); }}>
+                  <i className={`sw sw-${b.name.toLowerCase()}`} />{b.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <button className="fab sm" onClick={() => setLayersOpen(!layersOpen)} aria-expanded={layersOpen} aria-label="Map layers" title="Map layers"><Icon name="layers" size={20} /></button>
+        </div>
+        <button className={`fab sm ${live ? (following ? "on" : "ring") : ""}`} onClick={liveBtn} aria-pressed={live} aria-label={!live ? "Show my location" : following ? "Stop following" : "Re-center on me"} title={!live ? "Show and follow my location" : following ? "Stop following" : "Re-center on me"}><Icon name="locate" size={20} /></button>
+        {!bleed && <button className="fab sm" onClick={fit} aria-label="Fit all pins" title="Fit all pins"><Icon name="map" size={19} /></button>}
+        {!bleed && <button className="fab sm" onClick={() => setFull(!full)} aria-pressed={full} aria-label={full ? "Exit full screen" : "Full screen map"} title={full ? "Exit full screen" : "Full screen"}><Icon name={full ? "x" : "sliders"} size={19} /></button>}
+        {primary && <button className="fab pri" onClick={primary.onClick} aria-label={primary.label} title={primary.label}><Icon name={primary.icon} size={26} /></button>}
       </div>
-      <div className="map-layers" role="group" aria-label="Map style">
-        {BASES.map((b, i) => <button key={b.name} className={i === baseIx ? "on" : ""} aria-pressed={i === baseIx} onClick={() => setBaseIx(i)}>{b.name}</button>)}
+      <div className="map-notes">
+        {road && !road.fail && road.km > 0 && <div className="map-route" role="status"><Icon name="route" size={15} /><b>{Math.round(road.km)} km</b> by road · about {fmtMin(road.min)} driving{road.boat ? " · boat leg dashed" : ""}</div>}
+        {road?.fail && <div className="map-note warn-note"><Icon name="alert" size={15} />Road routes need a connection. Showing straight guide lines.</div>}
+        {near && <div className="map-note map-live" role="status"><Icon name="route" size={15} />Next: {near}</div>}
+        {note && <div className="map-note" role="status"><Icon name="info" size={15} />{note}</div>}
+        {tileFail && <div className="map-note warn-note"><Icon name="alert" size={15} />Map tiles need a connection. Pins and distances still work.</div>}
       </div>
-      {road && !road.fail && road.km > 0 && <div className="map-route" role="status"><Icon name="route" size={15} /><b>{Math.round(road.km)} km</b> by road · about {fmtMin(road.min)} driving{road.boat ? " · boat leg dashed" : ""}</div>}
-      {road?.fail && <div className="map-note warn-note"><Icon name="alert" size={15} />Road routes need a connection. Showing straight guide lines.</div>}
-      {near && <div className="map-note map-live" role="status"><Icon name="route" size={15} />Next: {near}</div>}
-      {note && <div className="map-note" role="status"><Icon name="info" size={15} />{note}</div>}
-      {tileFail && <div className="map-note warn-note"><Icon name="alert" size={15} />Map tiles need a connection. Pins and distances still work.</div>}
     </div>
   );
 }
