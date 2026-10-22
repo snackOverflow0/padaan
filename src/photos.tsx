@@ -13,6 +13,11 @@ const CANDIDATES: Record<string, string[]> = {
   vigan: ["Calle Crisologo", "Vigan", "Historic Town of Vigan"],
   hundred: ["Hundred Islands National Park", "Hundred Islands"],
   bolinao: ["Bolinao Falls", "Bolinao, Pangasinan", "Bolinao"],
+  bauang: ["Bauang, La Union", "Bauang"],
+  laoagbell: ["Sinking Bell Tower", "Laoag"],
+  paoay: ["Paoay Church", "Paoay, Ilocos Norte"],
+  bantay: ["Bantay Bell Tower", "Bantay, Ilocos Sur"],
+  bojeador: ["Cape Bojeador Lighthouse", "Burgos, Ilocos Norte"],
 };
 export interface Photo { url: string; credit: string; href: string }
 const KEY = "padaan.photos.v2";
@@ -22,7 +27,7 @@ let started = false;
 try { Object.assign(cache, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch { /* no storage */ }
 const BAD = /map|locator|location|seal|flag|logo|coat|emblem|diagram|\.svg/i;
 
-const COMMONS: Record<string, string> = { tangadan: "Tangadan Falls", urbiztondo: "Urbiztondo San Juan La Union beach", vigan: "Calle Crisologo Vigan", hundred: "Hundred Islands Pangasinan", bolinao: "Bolinao Falls" };
+const COMMONS: Record<string, string> = { tangadan: "Tangadan Falls", urbiztondo: "Urbiztondo San Juan La Union beach", vigan: "Calle Crisologo Vigan", hundred: "Hundred Islands Pangasinan", bolinao: "Bolinao Falls", bauang: "Bauang La Union beach", laoagbell: "Sinking Bell Tower Laoag", paoay: "Paoay Church", bantay: "Bantay Bell Tower Ilocos Sur", bojeador: "Cape Bojeador Lighthouse Burgos" };
 /** Fallback: search Wikimedia Commons photos directly. */
 async function commons(id: string): Promise<Photo | null> {
   const u = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=8&gsrsearch=${encodeURIComponent(COMMONS[id] ?? id)}&prop=imageinfo&iiprop=url|size|mime&iiurlwidth=1100`;

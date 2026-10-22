@@ -53,6 +53,21 @@ export const DESTS: Dest[] = [
     blurb: "Tiered turquoise falls reached through a tricycle ride from town.",
     people: [{ n: "Sol R.", role: "Local Resident" }],
     legs: [L("Bus", "San Fernando", "Bolinao", 240, 320, 240, 280, "Bolinao-bound bus, long ride"), L("Tricycle", "Bolinao Town", "Falls entrance", 60, 100, 15, 20, "Agree on a fare before riding")] },
+  { id: "bauang", name: "Bauang Beach", place: "Bauang, La Union", cat: "Beach", verified: false, budget: 1, daysAgo: 90,
+    blurb: "A long, easygoing stretch of dark sand just up the coast from San Fernando, good for sunsets and cheap seafood.", people: [],
+    legs: [L("Jeepney", "San Fernando Market", "Bauang Poblacion", 25, 35, 25, 35, "Bauang-bound jeepney on the national highway"), L("Tricycle", "Bauang Poblacion", "Beach", 30, 50, 10, 15, "Ask for the beach front, agree on the fare first")] },
+  { id: "laoagbell", name: "Sinking Bell Tower", place: "Laoag, Ilocos Norte", cat: "Heritage", verified: false, budget: 2, daysAgo: 90,
+    blurb: "A leaning 18th-century bell tower in the middle of Laoag City, an easy first stop in Ilocos Norte.", people: [],
+    legs: [L("Bus", "San Fernando", "Laoag", 450, 650, 270, 330, "Laoag-bound bus, long ride; sit on the shaded side"), L("Tricycle", "Laoag Terminal", "Bell Tower", 30, 50, 10, 15, "Tricycles queue outside the terminal")] },
+  { id: "paoay", name: "Paoay Church", place: "Paoay, Ilocos Norte", cat: "Heritage", verified: false, budget: 2, daysAgo: 90,
+    blurb: "A UNESCO World Heritage earthquake baroque church with massive buttresses, ten minutes from the Paoay Lake.", people: [],
+    legs: [L("Bus", "San Fernando", "Laoag", 450, 650, 270, 330, "Laoag-bound bus, long ride"), L("Jeepney", "Laoag Terminal", "Paoay Poblacion", 40, 60, 30, 40, "Paoay-bound jeepney or van from Laoag"), L("Tricycle", "Paoay Poblacion", "Church", 20, 40, 5, 10, "The church faces the town plaza")] },
+  { id: "bantay", name: "Bantay Bell Tower", place: "Bantay, Ilocos Sur", cat: "Heritage", verified: false, budget: 1, daysAgo: 90,
+    blurb: "A hillside watchtower and bell tower just outside Vigan with wide views over the town and the Abra River.", people: [],
+    legs: [L("Bus", "San Fernando", "Vigan", 250, 350, 150, 200, "Vigan-bound bus from the terminal"), L("Tricycle", "Vigan Terminal", "Bantay Bell Tower", 60, 100, 15, 20, "Tell the driver Bantay Church and Bell Tower")] },
+  { id: "bojeador", name: "Cape Bojeador Lighthouse", place: "Burgos, Ilocos Norte", cat: "Heritage", verified: false, budget: 3, daysAgo: 90,
+    blurb: "A Spanish-era lighthouse on a headland above the sea, with coastal views toward Pagudpud.", people: [],
+    legs: [L("Bus", "San Fernando", "Laoag", 450, 650, 270, 330, "Laoag-bound bus, long ride"), L("Bus", "Laoag Terminal", "Burgos", 70, 100, 60, 75, "Pagudpud-bound bus or van; ask to drop at Burgos"), L("Tricycle", "Burgos Poblacion", "Lighthouse", 100, 150, 15, 20, "Hilltop road; confirm the return ride")] },
 ];
 
 export const PACKS = [
@@ -100,6 +115,11 @@ export const GEO: Record<string, { lat: number; lng: number }> = {
   vigan: { lat: 17.5733, lng: 120.3870 },
   hundred: { lat: 16.2090, lng: 120.0170 },
   bolinao: { lat: 16.3330, lng: 119.9040 },
+  bauang: { lat: 16.5280, lng: 120.3170 },
+  laoagbell: { lat: 18.1972, lng: 120.5917 },
+  paoay: { lat: 18.0603, lng: 120.5196 },
+  bantay: { lat: 17.5860, lng: 120.3925 },
+  bojeador: { lat: 18.4950, lng: 120.5866 },
 };
 export const ORIGIN_GEO = { lat: 16.6159, lng: 120.3209 };
 
@@ -116,6 +136,11 @@ export const STOPS: Record<string, { name: string; lat: number; lng: number }[]>
   urbiztondo: [{ name: "San Juan Poblacion", lat: 16.6676, lng: 120.3318 }, { name: "Urbiztondo Beach", ...GEO.urbiztondo }],
   vigan: [{ name: "Vigan Terminal", lat: 17.5690, lng: 120.3890 }, { name: "Calle Crisologo", ...GEO.vigan }],
   hundred: [{ name: "Alaminos Terminal", lat: 16.1583, lng: 119.9818 }, { name: "Lucap Wharf", lat: 16.1995, lng: 120.0325 }, { name: "Immuki Island", ...GEO.hundred }],
+  bauang: [{ name: "Bauang Poblacion", lat: 16.5306, lng: 120.3326 }, { name: "Bauang Beach", ...GEO.bauang }],
+  laoagbell: [{ name: "Laoag Terminal", lat: 18.1960, lng: 120.5920 }, { name: "Sinking Bell Tower", ...GEO.laoagbell }],
+  paoay: [{ name: "Laoag Terminal", lat: 18.1960, lng: 120.5920 }, { name: "Paoay Poblacion", lat: 18.0585, lng: 120.5185 }, { name: "Paoay Church", ...GEO.paoay }],
+  bantay: [{ name: "Vigan Terminal", lat: 17.5690, lng: 120.3890 }, { name: "Bantay Bell Tower", ...GEO.bantay }],
+  bojeador: [{ name: "Laoag Terminal", lat: 18.1960, lng: 120.5920 }, { name: "Burgos Poblacion", lat: 18.5214, lng: 120.6178 }, { name: "Cape Bojeador Lighthouse", ...GEO.bojeador }],
   bolinao: [{ name: "Bolinao Town", lat: 16.3912, lng: 119.8896 }, { name: "Bolinao Falls", ...GEO.bolinao }],
 };
 /** Hand-off links so travelers can check the road in a full navigation app. */

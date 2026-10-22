@@ -1,0 +1,1 @@
+{ "name": "Padaan: The Road There", "short_name": "Padaan", "description": "Step-by-step local transport routes for Region I, Philippines.", "start_url": "/", "display": "standalone", "background_color": "#f7f3ea", "theme_color": "#0f3d31", "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }] }

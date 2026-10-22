@@ -116,6 +116,23 @@ const Empty = ({ icon, title, text, cta, onCta }: { icon: IconName; title: strin
 );
 
 /* ───────────── shell ───────────── */
+/** Full multi-leg road geometry for a set of destinations, starting at the traveler's start point. */
+function dayGeometry(list: Dest[], st: Place, open?: (id: string) => void) {
+  const pts: MapPoint[] = [{ id: "origin", ...st, label: st.name.split(",")[0], sub: st.landmark ?? "Your starting point", kind: "origin" }];
+  const lines: [string, string, string, string][] = [];
+  list.forEach((d, k) => {
+    const sp = STOPS[d.id] ?? []; let prev = "origin";
+    const dest: MapPoint = { id: d.id, ...GEO[d.id], label: d.name, sub: d.place, kind: "dest", n: k + 1, onOpen: () => open?.(d.id) };
+    if (!sp.length) { pts.push(dest); lines.push(["origin", d.id, "#1a5a49", "Jeepney"]); return; }
+    sp.forEach((s, i) => {
+      const last = i === sp.length - 1, id = last ? d.id : `${d.id}-s${i}`, mode = d.legs[Math.min(i, d.legs.length - 1)].mode;
+      pts.push(last ? dest : { id, lat: s.lat, lng: s.lng, label: s.name, sub: `${d.name} · step ${i + 1} (${mode})`, kind: "stop", n: i + 1 });
+      lines.push([prev, id, MODE_COLOR[mode], mode]); prev = id;
+    });
+  });
+  return { pts, lines };
+}
+
 function Rail({ view, go, ready, savedN }: { view: string; go: (v: string) => void; ready: string[]; savedN: number }) {
   return (
     <aside className="rail">
@@ -454,13 +471,13 @@ function TripPlanner(p: { stops: string[]; setStops: (s: string[]) => void; days
   const free = DESTS.filter((d) => !stops.includes(d.id));
   const move = (i: number) => { const s = [...stops]; [s[i - 1], s[i]] = [s[i], s[i - 1]]; p.setStops(s); };
   const hero = plan.stops[0];
-  const mapPts: MapPoint[] = [{ id: "origin", ...st, label: st.name.split(",")[0], sub: (st.landmark ?? "Your starting point"), kind: "origin" }, ...plan.stops.map((x, i): MapPoint => ({ id: x.id, ...GEO[x.id], label: x.name, sub: x.place, kind: "dest", n: i + 1, onOpen: () => p.open(x.id) }))];
+  const geo = useMemo(() => dayGeometry(cur.stops, st, p.open), [cur, st]);
   return (
     <div className="plan">
       <section className="plan-controls no-print" aria-label="Trip settings">
         <div className="card-pad">
           <span className="eyebrow">Build a real journey</span>
-          <h2>{days}-day La Union trip</h2>
+          <h2>{days}-day Region I trip</h2>
 
           <div className="startpoint"><span className="jnode"><Icon name="pin" size={14} /></span><div><small>Starting point</small><strong>{st.name}</strong></div></div>
 
@@ -506,16 +523,11 @@ function TripPlanner(p: { stops: string[]; setStops: (s: string[]) => void; days
           <div className="sheet-hero-in">
             <span className="pill light"><Icon name="download" size={14} />Offline copy</span>
             <div>
-              <span className="eyebrow light">La Union trip sheet · {people} {people === 1 ? "traveler" : "travelers"}</span>
+              <span className="eyebrow light">Region I trip sheet · {people} {people === 1 ? "traveler" : "travelers"}</span>
               <h2>{days} {days === 1 ? "day" : "days"} <i>/</i> {Math.max(days - 1, 0)} {days === 2 ? "night" : "nights"}</h2>
               <p>{stops.length ? plan.stops.map((s) => s.name).join(" · ") : "Add destinations to build your itinerary"}</p>
             </div>
           </div>
-        </div>
-
-        <div className="sheet-map no-print">
-          <MapView onPick={st.pick} label="Map of your trip stops" height="clamp(240px, 30vw, 320px)" points={mapPts} lines={plan.stops.map((x) => ["origin", x.id] as [string, string])} />
-          <p className="muted"><Icon name="info" size={15} />Each stop is a day trip out from {st.name.split(",")[0]}. Lines show direction only.</p>
         </div>
 
         <div className="tabs-day no-print" role="tablist" aria-label="Trip days">
@@ -524,6 +536,11 @@ function TripPlanner(p: { stops: string[]; setStops: (s: string[]) => void; days
               <small>Day</small><b>{n + 1}</b>{dd.stops.length > 0 && <i className="has" aria-hidden="true" />}
             </button>
           ))}
+        </div>
+
+        <div className="sheet-map no-print">
+          <MapView onPick={st.pick} label={`Map for day ${di + 1}`} height="clamp(300px, 44dvh, 480px)" points={geo.pts} lines={geo.lines} />
+          <p className="muted"><Icon name="info" size={15} />{cur.stops.length ? `Day ${di + 1}: ${cur.stops.map((s) => s.name).join(" + ")}, routed from ${st.name.split(",")[0]} along real roads. Tap a day to switch the map.` : `Day ${di + 1} is a free day. Add a destination to see its route.`}</p>
         </div>
 
         {plan.days.map((dd, n) => (
@@ -663,7 +680,16 @@ export default function App() {
   const go = (v: string) => { setBell(false); location.hash = `#/${v}`; };
   const open = (id: string) => { location.hash = `#/route/${id}`; setBell(false); };
   const toggleSave = (id: string) => { const on = saved.includes(id); setSaved(on ? saved.filter((x) => x !== id) : [...saved, id]); say(on ? "Removed from saved" : "Saved to your shortlist"); };
-  const setPlace = (p: Place) => { setStart(p); say(`Starting from ${p.name.split(",")[0]}`); };
+  const [manual, setManual] = useStored<boolean>("startManual", false);
+  useEffect(() => {
+    if (manual || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      if (km(c, start) < 0.3) return;
+      const name = await reverse(c.lat, c.lng); setStart({ name, ...c }); say(`Starting from your location: ${name.split(",")[0]}`);
+    }, () => {}, { timeout: 10000, maximumAge: 600000 });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const setPlace = (p: Place) => { setManual(true); setStart(p); say(`Starting from ${p.name.split(",")[0]}`); };
   const pickPlace = async (c: { lat: number; lng: number }) => setPlace({ name: await reverse(c.lat, c.lng), ...c });
   const ctx: StartCtxT = { ...start, change: () => setStartOpen(true), set: setPlace, pick: pickPlace };
   const d = DESTS.find((x) => x.id === sel)!;
