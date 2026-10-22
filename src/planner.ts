@@ -4,7 +4,8 @@ export type Pace = "Relaxed" | "Balanced" | "Packed";
 export interface DaySummary { hours: number; km: number; places: number; badge?: string }
 export interface PlanDay { stops: Dest[]; events: Ev[]; title?: string; summary?: DaySummary }
 type P = { lat: number; lng: number };
-type Blk = { stops: Dest[]; from?: Dest; end: "home" | "stay" };
+export interface ManualDay { ids: string[]; stay?: boolean; start?: number }
+type Blk = { stops: Dest[]; from?: Dest; end: "home" | "stay"; start?: number };
 
 const CAP: Record<Pace, number> = { Relaxed: 600, Balanced: 720, Packed: 840 }; // door-to-door minutes per day
 const DWELL: Record<Cat, number> = { Waterfall: 150, Beach: 180, Heritage: 90, Island: 240 };
@@ -55,7 +56,7 @@ function sequence(ds: Dest[], s: P, cap: number): Blk[] {
 function buildDay(b: Blk, s: Place, origin: string, lm: string) {
   const g = b.stops, E: Ev[] = [], from = b.from;
   const early = !from && g.some((d) => d.cat === "Island" || d.cat === "Waterfall");
-  const start = from ? 8 * 60 : (early ? 6 : 7) * 60; let t = start, travel = 0, kms = 0, fMin = 0, fMax = 0, transfers = 0;
+  const start = b.start ?? (from ? 8 * 60 : (early ? 6 : 7) * 60); let t = start, travel = 0, kms = 0, fMin = 0, fMax = 0, transfers = 0;
   let prev: Dest | undefined = from;
   if (from) { E.push(ev(clock(t), `Morning in ${town(from)}`, "Breakfast and a slow start", "1h", "star")); t += 60; }
   else E.push(ev(clock(t), `Depart ${origin}`, lm, "", "pin"));
@@ -82,28 +83,51 @@ function buildDay(b: Blk, s: Place, origin: string, lm: string) {
   return { day, travel, fMin, fMax, transfers };
 }
 
-/** Orders the stops, fits them into days, and builds the timeline. Estimates only; confirm locally. */
-export function smartPlan(ids: string[], start: Place, o: { days: number | "auto"; pace: Pace; optimize: boolean }) {
-  const given = ids.map((id) => DESTS.find((d) => d.id === id)).filter((d): d is Dest => !!d);
-  const ordered = o.optimize ? nearest(given, start) : given, cap = CAP[o.pace], notes: string[] = [];
+/** Keeps a hand-edited plan in step with the chosen places: drops removed ones, puts new ones in the lightest day. */
+export function fitManual(m: ManualDay[], stops: string[]): ManualDay[] {
+  const keep = m.map((d) => ({ ...d, ids: d.ids.filter((id) => stops.includes(id)) })), have = new Set(keep.flatMap((d) => d.ids));
+  for (const id of stops.filter((x) => !have.has(x))) { if (!keep.length) keep.push({ ids: [] }); let k = 0; keep.forEach((d, i) => { if (d.ids.length < keep[k].ids.length) k = i; }); keep[k].ids.push(id); }
+  return keep;
+}
+
+/** Orders the stops, fits them into days, and builds the timeline. Estimates only; confirm locally.
+    Pass `manual` to build from the traveler's own edited day layout instead of the automatic one. */
+export function smartPlan(ids: string[], start: Place, o: { days: number | "auto"; pace: Pace; optimize: boolean; manual?: ManualDay[] | null }) {
+  const given = ids.map((id) => DESTS.find((d) => d.id === id)).filter((d): d is Dest => !!d), cap = CAP[o.pace], notes: string[] = [];
   const origin = start.name.split(",")[0], lm = start.landmark ?? "Your starting point";
-  const len = (l: Dest[]) => l.reduce((n, d, i) => n + km(i ? GEO[l[i - 1].id] : start, GEO[d.id]), 0);
-  if (o.optimize && given.length > 2) { const sv = len(given) - len(ordered); if (sv > 5) notes.push(`Reordered your stops to save about ${Math.round(sv)} km of travel.`); }
-  if (!nearHub(start) && given.length) notes.push(`Your start is about ${Math.round(km(start, HUB))} km from San Fernando, so times and fares are estimated from distance.`);
-  const blocks = sequence(ordered, start, cap);
-  blocks.filter((b) => b.end === "stay").forEach((b) => { const l = b.stops[b.stops.length - 1]; notes.push(`Overnight near ${town(l)}: ${l.name} is about ${hm(oneWay(l, start))} from ${origin}, so staying nearby saves long round trips.`); });
-  let overflow: Dest[] = [];
-  if (o.days !== "auto") {
-    while (blocks.length < o.days) { const i = blocks.findIndex((b) => !b.from && b.end === "home" && b.stops.length > 1); if (i < 0) break; const b = blocks[i]; blocks.splice(i, 1, { stops: [b.stops[0]], end: "home" }, { stops: b.stops.slice(1), end: "home" }); }
-    if (blocks.length > o.days) { overflow = blocks.slice(o.days).flatMap((b) => b.stops); notes.push(`${overflow.map((d) => d.name).join(", ")} would need ${blocks.length} days at a ${o.pace.toLowerCase()} pace.`); }
+  const find = (id: string) => DESTS.find((d) => d.id === id);
+  let ordered = given, blocks: Blk[] = [], overflow: Dest[] = [];
+  if (o.manual) {
+    let from: Dest | undefined;
+    for (const md of o.manual) {
+      const stops = md.ids.map(find).filter((d): d is Dest => !!d), stay = !!md.stay && stops.length > 0;
+      blocks.push({ stops, from, end: stay ? "stay" : "home", start: md.start }); from = stay ? stops[stops.length - 1] : undefined;
+    }
+    if (from) blocks.push({ stops: [], from, end: "home" });
+    ordered = blocks.flatMap((b) => b.stops);
+  } else {
+    ordered = o.optimize ? nearest(given, start) : given;
+    const len = (l: Dest[]) => l.reduce((n, d, i) => n + km(i ? GEO[l[i - 1].id] : start, GEO[d.id]), 0);
+    if (o.optimize && given.length > 2) { const sv = len(given) - len(ordered); if (sv > 5) notes.push(`Reordered your stops to save about ${Math.round(sv)} km of travel.`); }
+    blocks = sequence(ordered, start, cap);
+    blocks.filter((b) => b.end === "stay").forEach((b) => { const l = b.stops[b.stops.length - 1]; notes.push(`Overnight near ${town(l)}: ${l.name} is about ${hm(oneWay(l, start))} from ${origin}, so staying nearby saves long round trips.`); });
+    if (o.days !== "auto") {
+      while (blocks.length < o.days) { const i = blocks.findIndex((b) => !b.from && b.end === "home" && b.stops.length > 1); if (i < 0) break; const b = blocks[i]; blocks.splice(i, 1, { stops: [b.stops[0]], end: "home" }, { stops: b.stops.slice(1), end: "home" }); }
+      if (blocks.length > o.days) { overflow = blocks.slice(o.days).flatMap((b) => b.stops); notes.push(`${overflow.map((d) => d.name).join(", ")} would need ${blocks.length} days at a ${o.pace.toLowerCase()} pace.`); }
+    }
   }
-  const built = blocks.map((b) => buildDay(b, start, origin, lm));
-  const days: PlanDay[] = built.map((x) => x.day), want = o.days === "auto" ? Math.max(days.length, 1) : Math.max(o.days, days.length);
-  while (days.length < want) days.push({ stops: [], events: [ev("09:00", "Free day", "Rest, or add a destination to fill this day", "", "star")] });
+  if (!nearHub(start) && given.length) notes.push(`Your start is about ${Math.round(km(start, HUB))} km from San Fernando, so times and fares are estimated from distance.`);
+  const free = (): PlanDay => ({ stops: [], events: [ev("09:00", "Free day", "Rest, or add a destination to fill this day", "", "star")] });
+  const built = blocks.map((b) => (b.stops.length || b.from ? buildDay(b, start, origin, lm) : { day: free(), travel: 0, fMin: 0, fMax: 0, transfers: 0 }));
+  const days: PlanDay[] = built.map((x) => x.day);
+  if (o.manual) built.forEach((x, i) => { const h = x.day.summary?.hours ?? 0; if (h > cap / 60 + 0.5) notes.push(`Day ${i + 1} is a long day (about ${hm(h * 60)}). Consider moving a place to another day.`); });
+  const want = o.manual || o.days === "auto" ? Math.max(days.length, 1) : Math.max(o.days, days.length);
+  while (days.length < want) days.push(free());
   const sel = new Set(given.map((d) => d.id));
   const suggest = DESTS.filter((d) => !sel.has(d.id)).map((d) => { let k = Infinity, near: Dest | null = null; given.forEach((g) => { const x = km(GEO[g.id], GEO[d.id]); if (x < k) { k = x; near = g; } }); return { d, k, near }; })
     .filter((x) => x.near && x.k <= 35).sort((a, b) => a.k - b.k).slice(0, 4).map((x) => ({ d: x.d, why: `${Math.round(x.k)} km from ${(x.near as Dest).name}` }));
-  return { days, notes, suggest, overflow, free: days.filter((d) => !d.summary).length, stops: ordered, minutes: built.reduce((n, x) => n + x.travel, 0), fMin: built.reduce((n, x) => n + x.fMin, 0), fMax: built.reduce((n, x) => n + x.fMax, 0), transfers: built.reduce((n, x) => n + x.transfers, 0) };
+  const layout: ManualDay[] = o.manual ?? blocks.filter((b) => b.stops.length).map((b) => ({ ids: b.stops.map((d) => d.id), stay: b.end === "stay" || undefined }));
+  return { days, notes, suggest, overflow, layout, free: days.filter((d) => !d.summary).length, stops: ordered, minutes: built.reduce((n, x) => n + x.travel, 0), fMin: built.reduce((n, x) => n + x.fMin, 0), fMax: built.reduce((n, x) => n + x.fMax, 0), transfers: built.reduce((n, x) => n + x.transfers, 0) };
 }
 
 /** "Build my trip": picks places from the chosen interests that fit the day budget, nearest and verified first. */

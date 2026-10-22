@@ -5,7 +5,7 @@ import { Pic } from "./photos";
 import { DesktopHome } from "./DesktopHome";
 import { LoginPage } from "./Login";
 import { clearGuest, currentUser, isGuest, signOut, type User } from "./auth";
-import { buildTrip, smartPlan, type Pace } from "./planner";
+import { buildTrip, fitManual, smartPlan, type ManualDay, type Pace } from "./planner";
 import { MapView, type MapPoint } from "./map";
 import {
   CATS, DEFAULT_START, DESTS, GEO, MODES, PACKS, STOPS, ROLES, directionsLinks, km, agoText, catIcon, dateAgo, fareText, fresh, hm, legTotals, modeIcon, modeKey, peso,
@@ -530,7 +530,12 @@ function TripPlanner(p: { stops: string[]; setStops: (s: string[]) => void; days
   const [day, setDay] = useState(0);
   const [auto, setAuto] = useStored<boolean>("tripAuto", true), [opt, setOpt] = useStored<boolean>("tripOpt", true), [pace, setPace] = useStored<Pace>("tripPace", "Balanced");
   const [interests, setInterests] = useState<Cat[]>([]);
-  const plan = useMemo(() => smartPlan(stops, st, { days: auto ? "auto" : days, pace, optimize: opt }), [stops, days, auto, pace, opt, st.lat, st.lng, st.name]);
+  const [manual, setManual] = useStored<ManualDay[] | null>("tripManual", null), [editing, setEditing] = useState(false);
+  const fresh = useRef(true);
+  useEffect(() => { if (fresh.current) { fresh.current = false; return; } setManual(null); }, [auto, days, pace, opt]); // changing the settings returns to automatic
+  const plan = useMemo(() => smartPlan(stops, st, { days: auto ? "auto" : days, pace, optimize: opt, manual: manual ? fitManual(manual, stops) : null }), [stops, days, auto, pace, opt, manual, st.lat, st.lng, st.name]);
+  const lay = plan.layout, hhmm = (m?: number) => (m == null ? "" : `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
+  const ed = (fn: (l: ManualDay[]) => ManualDay[]) => setManual(fn(lay.map((d) => ({ ...d, ids: [...d.ids] }))));
   const nd = plan.days.length, di = Math.min(day, nd - 1);
   const cur = plan.days[di];
   const hero = plan.stops[0];
@@ -609,6 +614,41 @@ function TripPlanner(p: { stops: string[]; setStops: (s: string[]) => void; days
           <MapView onPick={st.pick} label={`Map for day ${di + 1}`} height="clamp(300px, 44dvh, 480px)" points={geo.pts} lines={geo.lines} />
           <p className="muted"><Icon name="info" size={15} />{cur.stops.length ? `Day ${di + 1}: ${cur.stops.map((s) => s.name).join(" + ")}, routed from ${st.name.split(",")[0]} along real roads. Tap a day to switch the map.` : `Day ${di + 1} is a free day. Add a destination to see its route.`}</p>
         </div>
+
+        <div className="edit-bar no-print">
+          <button className={`btn ${editing ? "primary" : "secondary"} sm`} aria-pressed={editing} onClick={() => setEditing(!editing)}><Icon name={editing ? "check" : "sliders"} size={16} />{editing ? "Done editing" : "Edit plan"}</button>
+          {manual && <button className="btn ghost sm" onClick={() => setManual(null)}><Icon name="refresh" size={15} />Back to automatic</button>}
+          {manual && <span className="edit-tag">Edited by you</span>}
+        </div>
+        {editing && (
+          <div className="editor no-print">
+            <h4>Edit Day {di + 1}</h4>
+            {!lay[di] ? <p className="muted">This day is created automatically. Edit the days with places, or add a place to fill it.</p> : (
+              <>
+                {lay[di].ids.length === 0 && <p className="muted">No places on this day yet.</p>}
+                <ul>{lay[di].ids.map((id, i, arr) => { const d = DESTS.find((x) => x.id === id)!; return (
+                  <li key={id}><span className="num">{i + 1}</span><b>{d.name}</b>
+                    <span className="ed-btns">
+                      <button aria-label={`Move ${d.name} earlier`} disabled={i === 0} onClick={() => ed((l) => { const a = l[di].ids; [a[i - 1], a[i]] = [a[i], a[i - 1]]; return l; })}><Icon name="up" size={16} /></button>
+                      <button aria-label={`Move ${d.name} later`} disabled={i === arr.length - 1} onClick={() => ed((l) => { const a = l[di].ids; [a[i + 1], a[i]] = [a[i], a[i + 1]]; return l; })}><span className="flip"><Icon name="up" size={16} /></span></button>
+                      {di > 0 && <button aria-label={`Move ${d.name} to day ${di}`} onClick={() => ed((l) => { const [x] = l[di].ids.splice(i, 1); l[di - 1].ids.push(x); return l; })}>Day {di}</button>}
+                      <button aria-label={`Move ${d.name} to day ${di + 2}`} onClick={() => ed((l) => { const [x] = l[di].ids.splice(i, 1); (l[di + 1] ?? l[l.push({ ids: [] }) - 1]).ids.push(x); return l; })}>Day {di + 2}</button>
+                      <button aria-label={`Remove ${d.name}`} onClick={() => { p.setStops(stops.filter((s) => s !== id)); ed((l) => { l[di].ids.splice(i, 1); return l; }); }}><Icon name="x" size={16} /></button>
+                    </span></li>); })}</ul>
+                <label className="ed-add"><Icon name="plus" size={16} />
+                  <select value="" aria-label={`Add a place to day ${di + 1}`} onChange={(e) => { const id = e.target.value; if (!id) return; p.setStops([...stops, id]); ed((l) => { l[di].ids.push(id); return l; }); }}>
+                    <option value="">Add a place to this day</option>{DESTS.filter((d) => !stops.includes(d.id)).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select></label>
+                <label className="sw"><input type="checkbox" checked={!!lay[di].stay} disabled={!lay[di].ids.length} onChange={() => ed((l) => { l[di].stay = !l[di].stay; return l; })} />Stay overnight after this day</label>
+                <label className="ed-time">Start time<input type="time" value={hhmm(lay[di].start)} onChange={(e) => ed((l) => { const [h, m] = e.target.value.split(":").map(Number); l[di].start = e.target.value && !isNaN(h) ? h * 60 + (m || 0) : undefined; return l; })} /><small>Leave empty for automatic</small></label>
+              </>
+            )}
+            <div className="ed-row">
+              <button className="btn secondary sm" onClick={() => ed((l) => { l.push({ ids: [] }); return l; })}><Icon name="plus" size={15} />Add a day</button>
+              {lay[di] && lay[di].ids.length === 0 && lay.length > 1 && <button className="btn secondary sm" onClick={() => { ed((l) => { l.splice(di, 1); return l; }); setDay(Math.max(0, di - 1)); }}>Remove this day</button>}
+            </div>
+          </div>
+        )}
 
         {plan.days.map((dd, n) => (
           <div key={n} className={n === di ? "day" : "day print-only"} role={n === di ? "tabpanel" : undefined}>

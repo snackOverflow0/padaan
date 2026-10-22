@@ -1370,3 +1370,27 @@ html, body { overscroll-behavior: none; background: var(--bg); }
   .totals dd { font-size: 16px; } .totals div { padding: 12px; }
   .day-head h3 { font-size: 19px; }
 }
+
+
+/* ═══════════ Download button fix + editable itinerary ═══════════ */
+.plan-controls .card-pad { display: block; }
+.plan-controls .btn, .plan-controls .btn.lg { display: inline-flex !important; flex-direction: row !important; align-items: center !important; justify-content: center !important; flex: none !important; height: 50px !important; min-height: 0 !important; max-height: 50px !important; width: 100%; gap: 8px; border-radius: 999px; font-size: 15px; }
+.plan-controls .btn.sm { height: 40px !important; max-height: 40px !important; width: auto; }
+.plan-controls .btn.primary { background: var(--pri); background-image: none; box-shadow: 0 6px 14px rgba(23,138,85,.28); }
+.edit-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px clamp(16px, 2.4vw, 28px) 0; }
+.edit-bar .btn { height: 40px; padding: 0 16px; width: auto; }
+.edit-tag { padding: 5px 12px; border-radius: 999px; background: var(--pill); color: var(--pri-ink); font: 700 12.5px var(--f-body); }
+.editor { margin: 14px clamp(16px, 2.4vw, 28px) 0; padding: 18px; border-radius: 20px; border: 1px solid var(--line); background: var(--surface-2); display: grid; gap: 14px; }
+.editor h4 { font: 800 17px var(--f-head); color: var(--brand-teal); }
+.editor ul { display: grid; gap: 8px; }
+.editor li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 4px 10px; align-items: center; padding: 10px 12px; border-radius: 14px; background: #fff; border: 1px solid var(--line); }
+.editor li .num { grid-row: 1; } .editor li b { font-size: 15px; min-width: 0; }
+.ed-btns { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.ed-btns button { min-width: 44px; min-height: 40px; padding: 0 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line-2); font: 700 13px var(--f-body); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; }
+.ed-btns button:hover:not(:disabled) { background: var(--pill); } .ed-btns button:disabled { opacity: .35; }
+.flip { display: inline-flex; transform: rotate(180deg); }
+.ed-add { position: relative; display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 16px; border-radius: 999px; border: 1.5px dashed var(--line-2); color: var(--pri-ink); font-weight: 600; background: #fff; }
+.ed-add select { position: absolute; inset: 0; width: 100%; opacity: 0; font-size: 16px; cursor: pointer; } .ed-add:focus-within { outline: 3px solid var(--brand-leaf); outline-offset: 2px; }
+.ed-time { display: grid; gap: 6px; font: 600 14px var(--f-body); } .ed-time input { height: 46px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line-2); background: #fff; font: 500 16px var(--f-body); max-width: 200px; } .ed-time small { color: var(--muted); font-weight: 500; }
+.ed-row { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (min-width: 560px) { .editor li { grid-template-columns: 30px minmax(0, 1fr) auto; } .ed-btns { grid-column: auto; flex-wrap: nowrap; } }
