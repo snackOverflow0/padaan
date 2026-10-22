@@ -161,6 +161,32 @@ function Rail({ view, go, ready, savedN }: { view: string; go: (v: string) => vo
   );
 }
 
+function DeskNav(p: { view: string; go: (v: string) => void; ready: string[]; savedN: number; start: string; onStart: () => void; onSearch: () => void; onHelp: () => void; onBell: () => void; unread: boolean }) {
+  return (
+    <header className="dnav">
+      <button className="dn-brand" onClick={() => p.go("explore")} aria-label="Padaan home"><img src="/logo-mark.png" alt="" /><span><b>padaan</b><small>The Road There</small></span></button>
+      <nav className="dn-links" aria-label="Main">
+        {nav.map((n) => {
+          const on = p.view === n.id || (p.view === "route" && n.id === "explore");
+          const badge = n.id === "offline" ? p.ready.length : n.id === "saved" ? p.savedN : 0;
+          return (
+            <button key={n.id} className={`dn-link ${on ? "on" : ""}`} aria-current={on ? "page" : undefined} onClick={() => p.go(n.id)}>
+              <span className="dn-ic"><Icon name={on && n.id === "saved" ? "bookmark-fill" : n.icon} size={22} />{badge > 0 && <b className="dn-badge">{badge}</b>}</span>
+              <span>{n.short}</span>
+            </button>
+          );
+        })}
+      </nav>
+      <div className="dn-tools">
+        <button className="dn-start" onClick={p.onStart} aria-label={`Starting point: ${p.start}. Change`}><Icon name="pin" size={17} /><span>{p.start}</span></button>
+        <button className="dn-icon" onClick={p.onSearch} aria-label="Search (Ctrl K)"><Icon name="search" size={20} /></button>
+        <button className="dn-icon" onClick={p.onBell} aria-label={p.unread ? "Notifications, unread" : "Notifications"}><Icon name="bell" size={20} />{p.unread && <i className="dn-dot" />}</button>
+        <button className="dn-icon" onClick={p.onHelp} aria-label="Help and tips"><Icon name="info" size={20} /></button>
+      </div>
+    </header>
+  );
+}
+
 function Topbar(p: { start: string; onStart: () => void; view: string; unread: boolean; onSearch: () => void; onHelp: () => void; bell: boolean; onBell: () => void; onRead: () => void; onHome: () => void }) {
   const [eyebrow, title] = titles[p.view];
   return (
@@ -281,7 +307,7 @@ function Explore({ saved, toggleSave, open, ago, onSearch, onHelp }: { saved: st
     else if (e.key === "ArrowDown") { e.preventDefault(); setSnap(Math.max(0, snap - 1)); }
     else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSnap((snap + 1) % 3); }
   };
-  useEffect(() => { document.body.classList.add("noscroll"); return () => document.body.classList.remove("noscroll"); }, []);
+  useEffect(() => { document.body.classList.add("lock-m"); return () => document.body.classList.remove("lock-m"); }, []);
   useEffect(() => { if (focus) document.getElementById(`row-${focus.id}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [focus]);
 
   const pts: MapPoint[] = [
@@ -295,7 +321,7 @@ function Explore({ saved, toggleSave, open, ago, onSearch, onHelp }: { saved: st
       </div>
 
       <header className="gm-top">
-        <div className="gm-brand"><img src="/logo-mark.png" alt="" /><div><b>padaan</b><small>The Road There</small></div></div>
+        <div className="gm-hero"><span>Region I · Ilocos</span><h1>Where does the <em>road</em> take you?</h1><p>Real local routes, fares and road maps, from where you are to the last jeepney stop.</p></div>
         <div className="gm-search">
           <button className="gm-search-main" onClick={onSearch} aria-label="Search destinations"><span className="gm-logo"><img src="/logo-mark.png" alt="" /></span><span>Search destinations</span></button>
           <button className="gm-avatar" onClick={onHelp} aria-label="Help and tips">GT</button>
@@ -756,6 +782,7 @@ export default function App() {
       <a className="skip" href="#main">Skip to content</a>
       <Rail view={view} go={go} ready={ready} savedN={saved.length} />
       <BottomNav view={view} go={go} ready={ready} savedN={saved.length} />
+      <DeskNav view={view} go={go} ready={ready} savedN={saved.length} start={start.name.split(",")[0]} onStart={() => setStartOpen(true)} onSearch={() => setPalette(true)} onHelp={() => setHelp(true)} onBell={() => setNotifOpen(true)} unread={!read} />
       <div className="stage">
         <Topbar start={start.name.split(",")[0]} onStart={() => setStartOpen(true)} view={view} unread={!read} onSearch={() => setPalette(true)} onHelp={() => setHelp(true)} bell={bell} onBell={() => setBell(!bell)} onRead={() => { setRead(true); setBell(false); }} onHome={() => go("explore")} />
         <main id="main" className={`page v-${view}`} key={view + (view === "route" ? sel : "")}>
