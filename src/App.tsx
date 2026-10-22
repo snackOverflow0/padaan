@@ -3,6 +3,9 @@ import { reverse, searchPlaces } from "./geo";
 import { Icon, type IconName } from "./icons";
 import { Pic } from "./photos";
 import { DesktopHome } from "./DesktopHome";
+import { LoginPage } from "./Login";
+import { clearGuest, currentUser, isGuest, signOut, type User } from "./auth";
+import { buildTrip, smartPlan, type Pace } from "./planner";
 import { MapView, type MapPoint } from "./map";
 import {
   CATS, DEFAULT_START, DESTS, GEO, MODES, PACKS, STOPS, ROLES, directionsLinks, km, agoText, catIcon, dateAgo, fareText, fresh, hm, legTotals, modeIcon, modeKey, peso, tripPlan,
@@ -10,8 +13,8 @@ import {
 } from "./data";
 
 /* ───────────── starting point ───────────── */
-type StartCtxT = Place & { change: () => void; set: (p: Place) => void; pick: (p: { lat: number; lng: number }) => void };
-const StartCtx = createContext<StartCtxT>({ ...DEFAULT_START, change: () => {}, set: () => {}, pick: () => {} });
+type StartCtxT = Place & { account: () => void; initials: string; change: () => void; set: (p: Place) => void; pick: (p: { lat: number; lng: number }) => void };
+const StartCtx = createContext<StartCtxT>({ ...DEFAULT_START, account: () => {}, initials: "G", change: () => {}, set: () => {}, pick: () => {} });
 const MODE_COLOR: Record<Mode, string> = { Jeepney: "#188038", Tricycle: "#e37400", "Habal-habal": "#d93025", Bus: "#1a73e8", Boat: "#129eaf", Walk: "#5f6368" };
 
 function StartModal({ st, onClose }: { st: StartCtxT; onClose: () => void }) {
@@ -139,6 +142,11 @@ const useMedia = (q: string) => {
   return m;
 };
 
+function AccountBtn({ className }: { className: string }) {
+  const c = useContext(StartCtx);
+  return <button className={className} onClick={c.account} aria-label="Account">{c.initials}</button>;
+}
+
 function Rail({ view, go, ready, savedN }: { view: string; go: (v: string) => void; ready: string[]; savedN: number }) {
   return (
     <aside className="rail">
@@ -189,6 +197,7 @@ function DeskNav(p: { view: string; go: (v: string) => void; ready: string[]; sa
         <button className="dn-icon" onClick={p.onSearch} aria-label="Search (Ctrl K)"><Icon name="search" size={20} /></button>
         <button className="dn-icon" onClick={p.onBell} aria-label={p.unread ? "Notifications, unread" : "Notifications"}><Icon name="bell" size={20} />{p.unread && <i className="dn-dot" />}</button>
         <button className="dn-icon" onClick={p.onHelp} aria-label="Help and tips"><Icon name="info" size={20} /></button>
+        <AccountBtn className="dn-icon dn-acct" />
       </div>
     </header>
   );
@@ -331,7 +340,7 @@ function Explore({ saved, toggleSave, open, ago, onSearch, onHelp }: { saved: st
         <div className="gm-hero"><span>Region I · Ilocos</span><h1>Where does the <em>road</em> take you?</h1><p>Real local routes, fares and road maps, from where you are to the last jeepney stop.</p></div>
         <div className="gm-search">
           <button className="gm-search-main" onClick={onSearch} aria-label="Search destinations"><span className="gm-logo"><img src="/logo-mark.png" alt="" /></span><span>Search destinations</span></button>
-          <button className="gm-avatar" onClick={onHelp} aria-label="Help and tips">GT</button>
+          <AccountBtn className="gm-avatar" />
         </div>
         <label className="gm-find"><Icon name="search" size={18} /><input type="search" placeholder="Filter destinations" aria-label="Filter destinations" value={q} onChange={(e) => setQ(e.target.value)} /></label>
         <div className="gm-chips" role="group" aria-label="Filters">
@@ -519,8 +528,10 @@ function TripPlanner(p: { stops: string[]; setStops: (s: string[]) => void; days
   const { stops, days, people } = p;
   const st = useContext(StartCtx);
   const [day, setDay] = useState(0);
-  const plan = useMemo(() => tripPlan(stops, days, st.name, st.landmark), [stops, days, st.name, st.landmark]);
-  const di = Math.min(day, days - 1);
+  const [auto, setAuto] = useStored<boolean>("tripAuto", true), [opt, setOpt] = useStored<boolean>("tripOpt", true), [pace, setPace] = useStored<Pace>("tripPace", "Balanced");
+  const [interests, setInterests] = useState<Cat[]>([]);
+  const plan = useMemo(() => smartPlan(stops, st, { days: auto ? "auto" : days, pace, optimize: opt }), [stops, days, auto, pace, opt, st.lat, st.lng, st.name]);
+  const nd = plan.days.length, di = Math.min(day, nd - 1);
   const cur = plan.days[di];
   const free = DESTS.filter((d) => !stops.includes(d.id));
   const move = (i: number) => { const s = [...stops]; [s[i - 1], s[i]] = [s[i], s[i - 1]]; p.setStops(s); };
@@ -531,7 +542,16 @@ function TripPlanner(p: { stops: string[]; setStops: (s: string[]) => void; days
       <section className="plan-controls no-print" aria-label="Trip settings">
         <div className="card-pad">
           <span className="eyebrow">Build a real journey</span>
-          <h2>{days}-day Region I trip</h2>
+          <h2>{nd}-day Region I trip</h2>
+          <div className="smart no-print">
+            <div className="smart-h"><Icon name="star" size={16} /><b>Smart planner</b></div>
+            <p>Pick places, or choose what you like and I will build the trip. I order the stops, fit each day and flag early starts and overnights.</p>
+            <div className="smart-chips" role="group" aria-label="Interests">{CATS.map((c) => <button key={c} className={interests.includes(c) ? "on" : ""} aria-pressed={interests.includes(c)} onClick={() => setInterests(interests.includes(c) ? interests.filter((x) => x !== c) : [...interests, c])}><Icon name={catIcon[c]} size={15} />{c}</button>)}</div>
+            <div className="smart-pace" role="group" aria-label="Pace">{(["Relaxed", "Balanced", "Packed"] as Pace[]).map((x) => <button key={x} className={pace === x ? "on" : ""} aria-pressed={pace === x} onClick={() => setPace(x)}>{x}</button>)}</div>
+            <button className="btn primary smart-go" onClick={() => { p.setStops(buildTrip(interests, st, auto ? "auto" : days, pace)); setDay(0); }}><Icon name="star" size={17} />Build my trip</button>
+            <label className="sw"><input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />Choose the number of days for me</label>
+            <label className="sw"><input type="checkbox" checked={opt} onChange={(e) => setOpt(e.target.checked)} />Put my stops in the best order</label>
+          </div>
 
           <div className="startpoint"><span className="jnode"><Icon name="pin" size={14} /></span><div><small>Starting point</small><strong>{st.name}</strong></div></div>
 
@@ -542,10 +562,12 @@ function TripPlanner(p: { stops: string[]; setStops: (s: string[]) => void; days
               <li key={id}>
                 <span className="num">{i + 1}</span>
                 <div><b>{d.name}</b><small>{d.place}</small></div>
-                {i > 0 && <button className="icon-btn sm" aria-label={`Move ${d.name} earlier`} onClick={() => move(i)}><Icon name="up" size={16} /></button>}
+                {!opt && i > 0 && <button className="icon-btn sm" aria-label={`Move ${d.name} earlier`} onClick={() => move(i)}><Icon name="up" size={16} /></button>}
                 <button className="icon-btn sm" aria-label={`Remove ${d.name}`} onClick={() => p.setStops(stops.filter((s) => s !== id))}><Icon name="x" size={16} /></button>
               </li>); })}
           </ol>
+          {plan.notes.length > 0 && <ul className="smart-notes no-print">{plan.notes.map((n, i) => <li key={i}><Icon name="info" size={15} />{n}</li>)}</ul>}
+          {plan.suggest.length > 0 && <div className="smart-sugg no-print"><small>Nearby add-ons</small>{plan.suggest.map((x) => <button key={x.d.id} onClick={() => p.setStops([...stops, x.d.id])}><Icon name="plus" size={15} /><span><b>{x.d.name}</b><small>{x.why}</small></span></button>)}</div>}
           {free.length > 0 && (
             <label className="add-stop"><Icon name="plus" size={17} />
               <select aria-label="Add destination" value="" onChange={(e) => e.target.value && p.setStops([...stops, e.target.value])}>
@@ -555,7 +577,7 @@ function TripPlanner(p: { stops: string[]; setStops: (s: string[]) => void; days
           )}
 
           <div className="two">
-            <Stepper label="Duration" icon="calendar" value={days} min={1} max={7} unit={["day", "days"]} set={p.setDays} />
+            {auto ? <div className="auto-days"><Icon name="calendar" size={18} /><span><b>{nd} {nd === 1 ? "day" : "days"}</b><small>Set automatically</small></span></div> : <Stepper label="Duration" icon="calendar" value={days} min={1} max={7} unit={["day", "days"]} set={p.setDays} />}
             <Stepper label="Travelers" icon="users" value={people} min={1} max={12} set={p.setPeople} />
           </div>
 
@@ -578,7 +600,7 @@ function TripPlanner(p: { stops: string[]; setStops: (s: string[]) => void; days
             <span className="pill light"><Icon name="download" size={14} />Offline copy</span>
             <div>
               <span className="eyebrow light">Region I trip sheet · {people} {people === 1 ? "traveler" : "travelers"}</span>
-              <h2>{days} {days === 1 ? "day" : "days"} <i>/</i> {Math.max(days - 1, 0)} {days === 2 ? "night" : "nights"}</h2>
+              <h2>{nd} {nd === 1 ? "day" : "days"} <i>/</i> {Math.max(nd - 1, 0)} {nd === 2 ? "night" : "nights"}</h2>
               <p>{stops.length ? plan.stops.map((s) => s.name).join(" · ") : "Add destinations to build your itinerary"}</p>
             </div>
           </div>
@@ -599,7 +621,7 @@ function TripPlanner(p: { stops: string[]; setStops: (s: string[]) => void; days
 
         {plan.days.map((dd, n) => (
           <div key={n} className={n === di ? "day" : "day print-only"} role={n === di ? "tabpanel" : undefined}>
-            <div className="day-head"><span className="eyebrow">Day {n + 1}</span><h3>{dd.stops.length ? dd.stops.map((s) => s.name).join(" + ") : "Free day"}</h3></div>
+            <div className="day-head"><span className="eyebrow">Day {n + 1}</span><h3>{dd.stops.length ? dd.stops.map((s) => s.name).join(" + ") : "Free day"}</h3>{dd.summary && <p className="day-sum">{dd.summary.badge && <b>{dd.summary.badge}</b>}About {hm(dd.summary.hours * 60)} · {Math.round(dd.summary.km)} km · {dd.stops.length} {dd.stops.length === 1 ? "place" : "places"}</p>}</div>
             <ol className="timeline">
               {dd.events.map((e, i) => (
                 <li key={i} data-k={e.icon}>
@@ -745,8 +767,10 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const setPlace = (p: Place) => { setManual(true); setStart(p); say(`Starting from ${p.name.split(",")[0]}`); };
   const pickPlace = async (c: { lat: number; lng: number }) => setPlace({ name: await reverse(c.lat, c.lng), ...c });
+  const [user, setUser] = useState<User | null>(currentUser), [guest, setGuest] = useState(isGuest), [acctOpen, setAcctOpen] = useState(false);
+  const initials = user ? user.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() : "G";
   const wide = useMedia("(min-width: 981px)");
-  const ctx: StartCtxT = { ...start, change: () => setStartOpen(true), set: setPlace, pick: pickPlace };
+  const ctx: StartCtxT = { account: () => setAcctOpen(true), initials, ...start, change: () => setStartOpen(true), set: setPlace, pick: pickPlace };
   const d = DESTS.find((x) => x.id === sel)!;
   const ago = (x: Dest) => confirmed[x.id] ?? x.daysAgo;
 
@@ -783,6 +807,7 @@ export default function App() {
     say("Region pack ready offline");
   }, [prog, setReady]);
 
+  if (!user && !guest) return <LoginPage onDone={(u) => { setUser(u); setGuest(!u); }} />;
   return (
     <StartCtx.Provider value={ctx}>
     <div className={`app v-${view}`}>
@@ -809,6 +834,14 @@ export default function App() {
           <footer className="foot">Padaan · The Road There · Team GEIST, DMMMSU College of Information Technology</footer>
         </main>
       </div>
+      {acctOpen && (
+        <Modal title="Account" onClose={() => setAcctOpen(false)}>
+          <div className="acct"><span className="acct-av">{initials}</span><div><b>{user?.name ?? "Guest traveler"}</b><small>{user?.email ?? "Saved places and trips stay on this device"}</small></div></div>
+          {user
+            ? <button className="btn secondary" onClick={() => { signOut(); setUser(null); setGuest(false); setAcctOpen(false); }}>Sign out</button>
+            : <button className="btn primary" onClick={() => { clearGuest(); setGuest(false); setAcctOpen(false); }}>Sign in or create account</button>}
+        </Modal>
+      )}
       {startOpen && <StartModal st={ctx} onClose={() => setStartOpen(false)} />}
       {palette && <Palette onClose={() => setPalette(false)} go={go} open={open} />}
       {help && (

@@ -78,8 +78,8 @@ export const PACKS = [
 export const peso = (n: number) => "₱" + Math.round(n).toLocaleString();
 export const fareText = (l: Pick<Leg, "fMin" | "fMax">) => (l.fMax === 0 ? "Free" : l.fMin === l.fMax ? peso(l.fMin) : `${peso(l.fMin)}–${peso(l.fMax)}`);
 export const hm = (m: number) => { const h = Math.floor(m / 60), r = Math.round(m % 60); return h ? `${h}h${r ? ` ${r}m` : ""}` : `${r}m`; };
-const clock = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(Math.round(m % 60)).padStart(2, "0")}`;
-const ev = (time: string, title: string, meta: string, duration: string, icon: IconName): Ev => ({ time, title, meta, duration, icon });
+export const clock = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(Math.round(m % 60)).padStart(2, "0")}`;
+export const ev = (time: string, title: string, meta: string, duration: string, icon: IconName): Ev => ({ time, title, meta, duration, icon });
 export const dateAgo = (d: number) => new Date(Date.now() - d * 864e5).toLocaleDateString("en", { month: "long", day: "numeric", year: "numeric" });
 
 /** Turns chosen destinations into a day-by-day plan (each stop is an out-and-back day trip from the hub). */

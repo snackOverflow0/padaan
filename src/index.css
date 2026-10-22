@@ -1299,3 +1299,35 @@ html, body { overscroll-behavior: none; background: var(--bg); }
 .gm-sheet.closed { height: 0 !important; overflow: hidden; box-shadow: none; pointer-events: none; }
 .gm-reopen { position: absolute; z-index: 16; left: 50%; bottom: 16px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 22px; border-radius: 23px; background: #fff; color: var(--pri-ink); font: 700 15px var(--f-body); box-shadow: 0 2px 10px rgba(0,0,0,.25); white-space: nowrap; }
 .gm.sheet-closed .map-fabs { opacity: 1; }
+
+
+/* ═══════════ Smart trip planner ═══════════ */
+.smart { margin: 14px 0 18px; padding: 16px; border-radius: 20px; background: linear-gradient(160deg, var(--pri-soft), #fffbe6); border: 1px solid var(--line); display: grid; gap: 12px; }
+.smart-h { display: flex; align-items: center; gap: 8px; color: var(--pri-ink); } .smart > p { font-size: 13.5px; color: var(--ink-2); line-height: 1.5; }
+.smart-chips, .smart-pace { display: flex; flex-wrap: wrap; gap: 8px; }
+.smart-chips button, .smart-pace button { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 14px; border-radius: 19px; background: #fff; border: 1px solid var(--line-2); font: 600 13.5px var(--f-body); } .smart-pace button { flex: 1; justify-content: center; }
+.smart-chips button.on, .smart-pace button.on { background: var(--pri); border-color: var(--pri); color: #fff; }
+.smart-go { width: 100%; justify-content: center; } .sw { display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; } .sw input { width: 18px; height: 18px; accent-color: var(--pri); }
+.smart-notes { display: grid; gap: 8px; margin: 12px 0; } .smart-notes li { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: #fff4dc; color: #6b4a00; font-size: 13.5px; line-height: 1.45; } .smart-notes svg { flex: none; margin-top: 2px; }
+.smart-sugg { display: grid; gap: 6px; margin: 12px 0; } .smart-sugg > small { font-weight: 700; color: var(--muted); }
+.smart-sugg button { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); text-align: left; } .smart-sugg button:hover { background: var(--pill); } .smart-sugg b { display: block; font-size: 14px; } .smart-sugg span small { color: var(--muted); font-size: 12.5px; }
+.auto-days { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: var(--surface-2); } .auto-days b { display: block; } .auto-days small { color: var(--muted); }
+.day-sum { margin-top: 6px; color: var(--muted); font-size: 14px; } .day-sum b { margin-right: 8px; padding: 3px 10px; border-radius: 999px; background: var(--pill); color: var(--pri-ink); font-size: 12px; }
+
+/* ═══════════ Sign in ═══════════ */
+.lg { min-height: 100dvh; display: grid; grid-template-columns: 1.05fr 1fr; background: #fff; }
+.lg-brand { display: flex; flex-direction: column; justify-content: center; gap: 28px; padding: 64px; background: radial-gradient(70% 80% at 100% 0%, rgba(255,228,58,.4), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(120,217,143,.5), transparent 60%), #eefaf2; }
+.lg-brand img { width: min(360px, 70%); height: auto; } .lg-brand h2 { font: 800 clamp(30px, 3vw, 44px)/1.1 var(--f-head); letter-spacing: -.03em; color: var(--brand-teal); max-width: 460px; }
+.lg-brand li { display: flex; align-items: center; gap: 12px; padding: 8px 0; font-size: 16px; color: var(--ink-2); } .lg-brand li svg { color: var(--pri); flex: none; }
+.lg-card { align-self: center; justify-self: center; width: min(440px, 100%); padding: 40px 32px; display: grid; gap: 14px; }
+.lg-mark { display: none; width: 64px; } .lg-card h1 { font: 800 30px/1.15 var(--f-head); color: var(--brand-teal); } .lg-sub { color: var(--muted); }
+.lg-tabs { display: grid; grid-template-columns: 1fr 1fr; padding: 4px; border-radius: 16px; background: var(--surface-2); } .lg-tabs button { height: 44px; border-radius: 12px; font: 700 14.5px var(--f-body); color: var(--muted); } .lg-tabs .on { background: #fff; color: var(--pri-ink); box-shadow: var(--sh-1); }
+.lg form { display: grid; gap: 14px; } .lg label { display: grid; gap: 6px; font: 600 13.5px var(--f-body); color: var(--ink-2); }
+.lg input { width: 100%; height: 52px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--line-2); background: #fff; font: 500 16px var(--f-body); color: var(--ink); outline: 0; } .lg input:focus { border-color: var(--pri); box-shadow: 0 0 0 4px var(--pri-soft); }
+.lg-pw { position: relative; display: block; } .lg-pw input { padding-right: 70px; } .lg-pw button { position: absolute; right: 8px; top: 8px; height: 36px; padding: 0 12px; border-radius: 10px; color: var(--pri); font-weight: 700; font-size: 13.5px; }
+.lg-err { display: flex; gap: 8px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; background: #fdeceb; color: #a1221a; font-size: 14px; } .lg-err svg { flex: none; margin-top: 2px; }
+.lg-submit, .lg-guest { width: 100%; height: 52px; justify-content: center; border-radius: 26px; font-size: 16px; } .lg-or { display: grid; place-items: center; position: relative; color: var(--muted); font-size: 13px; } .lg-or::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--line); } .lg-or span { position: relative; padding: 0 12px; background: #fff; }
+.lg-note { display: flex; gap: 6px; align-items: center; justify-content: center; color: var(--muted); font-size: 12.5px; text-align: center; }
+.acct { display: flex; gap: 14px; align-items: center; margin-bottom: 18px; } .acct-av { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 50%; background: var(--pri); color: #fff; font: 800 20px var(--f-head); } .acct small { display: block; color: var(--muted); margin-top: 3px; }
+.dn-acct { background: var(--pri); color: #fff; font: 800 14px var(--f-body); }
+@media (max-width: 900px) { .lg { grid-template-columns: 1fr; } .lg-brand { display: none; } .lg-mark { display: block; } .lg-card { padding: calc(28px + env(safe-area-inset-top)) 22px 32px; align-self: start; } }
