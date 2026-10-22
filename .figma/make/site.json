@@ -1,0 +1,11 @@
+{
+  "description": "A crowd-sourced route directory and trip planner for remote destinations in the Philippines. Pilot: La Union, Region I.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  },
+  "title": "Padaan: The Road There"
+}
