@@ -1267,3 +1267,35 @@ html, body { overscroll-behavior: none; background: var(--bg); }
 .dh-steps li { padding: 28px; border-radius: 28px; background: var(--pri-soft); } .dh-steps li span { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--pri); color: #fff; font: 800 18px var(--f-head); margin-bottom: 16px; } .dh-steps b { font: 800 19px var(--f-head); color: var(--brand-teal); } .dh-steps p { margin-top: 8px; color: var(--ink-2); line-height: 1.55; }
 @media (max-width: 1180px) { .dh-hero { grid-template-columns: 1fr; padding: 44px 36px; } .dh-collage { display: none; } .dh-grid { grid-template-columns: repeat(2, 1fr); } .dh-tiles { grid-template-columns: repeat(2, 1fr); } }
 @media (prefers-reduced-motion: reduce) { .dh-card, .dh-tile, .dh-photo, .dh-pic > :first-child { transition: none; } }
+
+
+/* ═══════════ Simple white navigation, locked map screen, closable Explore sheet ═══════════ */
+/* Desktop: plain white top bar, text links with an underline on the active page */
+@media (min-width: 981px) {
+  .dnav { grid-template-columns: auto 1fr auto; background: #fff; backdrop-filter: none; box-shadow: 0 1px 0 var(--line); }
+  .dn-links { justify-self: center; gap: 4px; padding: 0; border-radius: 0; background: none; box-shadow: none; }
+  .dn-link { position: relative; flex-direction: row; gap: 8px; min-width: 0; padding: 12px 16px; border-radius: 12px; color: var(--ink-2); font: 600 15px var(--f-body); }
+  .dn-link:hover { background: var(--surface-2); color: var(--ink); }
+  .dn-link.on { background: none; color: var(--pri-ink); } .dn-link.on .dn-ic { color: var(--pri); }
+  .dn-link.on::after { content: ""; position: absolute; left: 16px; right: 16px; bottom: -11px; height: 3px; border-radius: 3px 3px 0 0; background: var(--pri); }
+  .dn-badge { top: -8px; right: -11px; background: var(--pri); color: #fff; }
+  .dn-link:focus-visible { outline: 3px solid var(--pri); }
+}
+/* Phone: flat white bottom bar */
+@media (max-width: 980px) {
+  :root { --bn: calc(64px + env(safe-area-inset-bottom, 0px)); }
+  .bnav { left: 0; right: 0; bottom: 0; height: var(--bn); padding: 6px 4px env(safe-area-inset-bottom, 0px); gap: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: #fff; box-shadow: none; }
+  .bn { color: var(--muted); border-radius: 0; gap: 2px; font: 600 11.5px var(--f-body); }
+  .bn.on { background: none; color: var(--pri-ink); } .bn.on .bn-lb { color: var(--pri-ink); font-weight: 700; }
+  .bn-ic { padding: 3px 18px; border-radius: 14px; transition: background .2s; }
+  .bn.on .bn-ic { background: var(--pill) !important; color: var(--pri); }
+  .bn-badge { background: var(--pri); color: #fff; right: -2px; top: -5px; }
+  .v-explore .foot { display: none; }
+  /* the map screen never scrolls: dragging the map moves only the map */
+  body.lock-m { position: fixed; inset: 0; width: 100%; overflow: hidden; }
+}
+.gm-close { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: var(--surface-2); color: var(--ink-2); } .gm-close:hover { background: var(--line); }
+.gm-head { gap: 8px; }
+.gm-sheet.closed { height: 0 !important; overflow: hidden; box-shadow: none; pointer-events: none; }
+.gm-reopen { position: absolute; z-index: 16; left: 50%; bottom: 16px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 22px; border-radius: 23px; background: #fff; color: var(--pri-ink); font: 700 15px var(--f-body); box-shadow: 0 2px 10px rgba(0,0,0,.25); white-space: nowrap; }
+.gm.sheet-closed .map-fabs { opacity: 1; }

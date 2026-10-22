@@ -304,7 +304,7 @@ function Explore({ saved, toggleSave, open, ago, onSearch, onHelp }: { saved: st
 
   // Bottom sheet: drag the handle (or tap / use arrow keys) to snap between peek, half and full.
   const box = useRef<HTMLDivElement>(null), g = useRef({ y: 0, h: 0, moved: false });
-  const [snap, setSnap] = useState(1), [drag, setDrag] = useState<number | null>(null);
+  const [snap, setSnap] = useState(1), [drag, setDrag] = useState<number | null>(null), [shown, setShown] = useState(true);
   const px = (i: number) => { const h = box.current?.clientHeight ?? 700; return i === 2 ? Math.min(h * SNAP[2], h - 124) : h * SNAP[i]; };
   const down = (e: RPE) => { e.currentTarget.setPointerCapture(e.pointerId); g.current = { y: e.clientY, h: px(snap), moved: false }; setDrag(px(snap)); };
   const move = (e: RPE) => { if (drag === null) return; if (Math.abs(e.clientY - g.current.y) > 5) g.current.moved = true; setDrag(Math.min(px(2), Math.max(px(0), g.current.h + g.current.y - e.clientY))); };
@@ -322,9 +322,9 @@ function Explore({ saved, toggleSave, open, ago, onSearch, onHelp }: { saved: st
     ...list.map((d, i): MapPoint => ({ id: d.id, ...GEO[d.id], label: d.name, sub: `${d.place} · ${fareText({ fMin: legTotals(d).f0, fMax: legTotals(d).f1 })}`, kind: "dest", n: i + 1, onOpen: () => open(d.id) })),
   ];
   return (
-    <div className={`gm ${snap === 2 && drag === null ? "sheet-full" : ""} ${drag !== null ? "dragging" : ""}`} ref={box}>
+    <div className={`gm ${snap === 2 && drag === null ? "sheet-full" : ""} ${drag !== null ? "dragging" : ""} ${shown ? "" : "sheet-closed"}`} ref={box}>
       <div className="gm-map">
-        <MapView bleed dock={drag !== null ? `${drag}px` : sheetH(snap)} primary={{ icon: "directions", label: `Starting from ${st.name.split(",")[0]}. Change starting point`, onClick: st.change }} onPick={st.pick} label="Map of destinations" height="100%" focus={focus} onSelect={(id) => { setFocus({ id, t: Date.now() }); setSnap(1); }} points={pts} />
+        <MapView bleed dock={!shown ? "0px" : drag !== null ? `${drag}px` : sheetH(snap)} primary={{ icon: "directions", label: `Starting from ${st.name.split(",")[0]}. Change starting point`, onClick: st.change }} onPick={st.pick} label="Map of destinations" height="100%" focus={focus} onSelect={(id) => { setFocus({ id, t: Date.now() }); setSnap(1); }} points={pts} />
       </div>
 
       <header className="gm-top">
@@ -341,11 +341,13 @@ function Explore({ saved, toggleSave, open, ago, onSearch, onHelp }: { saved: st
         </div>
       </header>
 
-      <section className={`gm-sheet ${snap === 2 ? "full" : ""} ${drag !== null ? "dragging" : ""}`} style={{ height: drag !== null ? drag : sheetH(snap) }} aria-label="Destinations">
+      {!shown && <button className="gm-reopen" onClick={() => setShown(true)}><Icon name="up" size={18} />Explore · {list.length} {list.length === 1 ? "place" : "places"}</button>}
+      <section className={`gm-sheet ${snap === 2 ? "full" : ""} ${drag !== null ? "dragging" : ""} ${shown ? "" : "closed"}`} style={{ height: !shown ? 0 : drag !== null ? drag : sheetH(snap) }} aria-label="Destinations" aria-hidden={!shown}>
         <button className="gm-grab" aria-label="Resize destination list" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onKeyDown={key}><i /></button>
         <div className="gm-head">
           <div className="gm-title"><h2>Explore</h2><p>{list.length} {list.length === 1 ? "destination" : "destinations"} across Region I</p></div>
           <label className="gm-sort"><span className="sr">Sort by</span><Icon name="sliders" size={16} /><select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>{SORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+          <button className="gm-close" aria-label="Close destination list" onClick={() => setShown(false)}><Icon name="x" size={20} /></button>
         </div>
         <div className="gm-scroll">
           {!list.length ? <Empty icon="search" title="No destinations match" text="Try another category or clear your filters." cta="Clear filters" onCta={reset} /> : (
